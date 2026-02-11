@@ -20,6 +20,10 @@ func main() {
 	defer pool.Close()
 	log.Println("DB connected")
 
+	if err := database.RunMigrations(ctx, pool); err != nil {
+		log.Fatalf("migration: %v", err)
+	}
+
 	r := gin.Default()
 
 	r.GET("/health", func(c *gin.Context) {
