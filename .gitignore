@@ -1,0 +1,41 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Build
+dist/
+build/
+*.exe
+
+# Dependencies
+node_modules/
+vendor/
+
+# Go
+*.test
+coverage.out
+*.out
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
+
+# Temporary
+tmp/
+temp/
+*.tmp
