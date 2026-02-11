@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"matcha/api/internal/config"
 	"matcha/api/internal/database"
+	"matcha/api/internal/repository"
 )
 
 func main() {
@@ -24,6 +25,8 @@ func main() {
 		log.Fatalf("migration: %v", err)
 	}
 
+	userRepo := repository.NewUserRepository(pool)
+
 	r := gin.Default()
 
 	r.GET("/health", func(c *gin.Context) {
@@ -33,6 +36,8 @@ func main() {
 	r.GET("/api/v1/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
+
+	_ = userRepo // пока не используем
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
