@@ -1,14 +1,25 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
+	"matcha/api/internal/config"
+	"matcha/api/internal/database"
 )
 
 func main() {
+	ctx := context.Background()
+	pool, err := database.NewPool(ctx, config.DatabaseURL())
+	if err != nil {
+		log.Fatalf("db: %v", err)
+	}
+	defer pool.Close()
+	log.Println("DB connected")
+
 	r := gin.Default()
 
 	r.GET("/health", func(c *gin.Context) {
