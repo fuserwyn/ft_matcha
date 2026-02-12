@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -20,6 +21,7 @@ func Auth(jwtSecret string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := extractToken(c)
 		if token == "" {
+			log.Printf("[auth] %s %s: missing or invalid Authorization header", c.Request.Method, c.Request.URL.Path)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			c.Abort()
 			return
@@ -29,7 +31,14 @@ func Auth(jwtSecret string) gin.HandlerFunc {
 		t, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
 			return []byte(jwtSecret), nil
 		})
-		if err != nil || !t.Valid {
+		if err != nil {
+			log.Printf("[auth] %s %s: token parse error: %v", c.Request.Method, c.Request.URL.Path, err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			c.Abort()
+			return
+		}
+		if !t.Valid {
+			log.Printf("[auth] %s %s: token not valid", c.Request.Method, c.Request.URL.Path)
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 			c.Abort()
 			return

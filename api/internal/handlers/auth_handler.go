@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -58,7 +59,13 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	token, _ := h.issueToken(u.ID)
+	token, err := h.issueToken(u.ID)
+	if err != nil {
+		log.Printf("[auth] register ok but token issue failed for user=%s: %v", u.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	log.Printf("[auth] register ok: user=%s username=%q", u.ID, u.Username)
 	c.JSON(http.StatusCreated, gin.H{
 		"token": token,
 		"user": gin.H{
@@ -89,10 +96,17 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	u, err := h.authSvc.Login(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
+		log.Printf("[auth] login failed for username=%q: %v", req.Username, err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
 	}
-	token, _ := h.issueToken(u.ID)
+	token, err := h.issueToken(u.ID)
+	if err != nil {
+		log.Printf("[auth] login ok but token issue failed for user=%s: %v", u.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+	log.Printf("[auth] login ok: user=%s username=%q", u.ID, u.Username)
 	c.JSON(http.StatusOK, gin.H{
 		"token": token,
 		"user": gin.H{
