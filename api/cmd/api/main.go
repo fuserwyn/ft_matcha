@@ -21,6 +21,7 @@ import (
 	"matcha/api/internal/repository"
 	"matcha/api/internal/services"
 
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -60,6 +61,12 @@ func main() {
 	profileH := handlers.NewProfileHandler(profileRepo)
 
 	r := gin.Default()
+	r.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{config.CORSOrigin()},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
 
 	r.GET("/health", health)
 	r.GET("/api/v1/ping", ping)

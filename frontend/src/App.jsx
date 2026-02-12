@@ -1,20 +1,33 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-
-function Home() {
-  return (
-    <div style={{ padding: '2rem', textAlign: 'center' }}>
-      <h1>Matcha</h1>
-      <p>Welcome to Matcha — dating app</p>
-    </div>
-  )
-}
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { AuthProvider } from './context/AuthContext'
+import { Layout } from './components/Layout'
+import { ProtectedRoute } from './components/ProtectedRoute'
+import Home from './pages/Home'
+import Login from './pages/Login'
+import Register from './pages/Register'
+import Profile from './pages/Profile'
 
 export default function App() {
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-      </Routes>
+      <AuthProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route
+              path="/profile"
+              element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Layout>
+      </AuthProvider>
     </BrowserRouter>
   )
 }

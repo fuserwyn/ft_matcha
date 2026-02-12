@@ -15,3 +15,10 @@ func JWTSecret() string {
 	}
 	return "dev_secret"
 }
+
+func CORSOrigin() string {
+	if v := os.Getenv("CORS_ORIGIN"); v != "" {
+		return v
+	}
+	return "http://localhost:3000"
+}
