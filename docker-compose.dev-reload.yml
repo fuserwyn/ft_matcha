@@ -1,0 +1,15 @@
+# Dev with hot reload - код монтируется, изменения подхватываются автоматически
+# Usage: docker compose -f docker-compose.dev.yml -f docker-compose.dev-reload.yml up
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./api:/app
+      - api_tmp:/app/tmp  # air build cache
+    command: air -c .air.toml
+
+volumes:
+  api_tmp:

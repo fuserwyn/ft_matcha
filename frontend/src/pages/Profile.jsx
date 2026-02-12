@@ -44,6 +44,18 @@ export default function Profile() {
     e.preventDefault()
     setError('')
     setMessage('')
+    if (data.birth_date) {
+      const d = new Date(data.birth_date)
+      if (d > new Date()) {
+        setError('Birth date must be in the past')
+        return
+      }
+      const age = Math.floor((new Date() - d) / (365.25 * 24 * 60 * 60 * 1000))
+      if (age < 18) {
+        setError('You must be at least 18 years old')
+        return
+      }
+    }
     setSaving(true)
     const payload = {}
     if (data.bio) payload.bio = data.bio
@@ -134,6 +146,7 @@ export default function Profile() {
             name="birth_date"
             value={data.birth_date}
             onChange={handleChange}
+            max={new Date().toISOString().split('T')[0]}
             className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
           />
           <p className="text-xs text-slate-500 mt-1">YYYY-MM-DD, 18+</p>
