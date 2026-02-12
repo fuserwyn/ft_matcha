@@ -27,6 +27,14 @@ type UpdateProfileReq struct {
 	Longitude        *float64 `json:"longitude"`
 }
 
+// GetMe godoc
+// @Summary	Get own profile
+// @Tags		profile
+// @Security	BearerAuth
+// @Produce	json
+// @Success	200	{object}	map[string]interface{}
+// @Failure	401	{object}	map[string]string
+// @Router		/api/v1/profile/me [get]
 func (h *ProfileHandler) GetMe(c *gin.Context) {
 	userID, _ := c.Get(middleware.UserIDKey)
 	id := userID.(uuid.UUID)
@@ -41,6 +49,18 @@ func (h *ProfileHandler) GetMe(c *gin.Context) {
 	c.JSON(http.StatusOK, toProfileResp(p))
 }
 
+// UpdateMe godoc
+// @Summary	Update own profile
+// @Tags		profile
+// @Security	BearerAuth
+// @Accept		json
+// @Produce	json
+// @Param		body	body		UpdateProfileReq	true	"Profile fields"
+// @Success	200	{object}	map[string]interface{}
+// @Failure	400	{object}	map[string]string
+// @Failure	401	{object}	map[string]string
+// @Failure	500	{object}	map[string]string
+// @Router		/api/v1/profile/me [put]
 func (h *ProfileHandler) UpdateMe(c *gin.Context) {
 	userID, _ := c.Get(middleware.UserIDKey)
 	id := userID.(uuid.UUID)

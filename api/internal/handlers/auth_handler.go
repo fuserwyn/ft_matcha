@@ -33,6 +33,16 @@ type LoginReq struct {
 	Password string `json:"password" binding:"required"`
 }
 
+// Register godoc
+// @Summary	Register new user
+// @Tags		auth
+// @Accept		json
+// @Produce	json
+// @Param		body	body		RegisterReq	true	"Registration data"
+// @Success	201	{object}	map[string]interface{}
+// @Failure	400	{object}	map[string]string
+// @Failure	409	{object}	map[string]string
+// @Router		/api/v1/auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -61,6 +71,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
+// Login godoc
+// @Summary	Login
+// @Tags		auth
+// @Accept		json
+// @Produce	json
+// @Param		body	body		LoginReq	true	"Credentials"
+// @Success	200	{object}	map[string]interface{}
+// @Failure	400	{object}	map[string]string
+// @Failure	401	{object}	map[string]string
+// @Router		/api/v1/auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -85,6 +105,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+// Me godoc
+// @Summary	Get current user
+// @Tags		auth
+// @Security	BearerAuth
+// @Produce	json
+// @Success	200	{object}	map[string]interface{}
+// @Failure	401	{object}	map[string]string
+// @Failure	404	{object}	map[string]string
+// @Router		/api/v1/auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
 	userID, _ := c.Get(middleware.UserIDKey)
 	id := userID.(uuid.UUID)
