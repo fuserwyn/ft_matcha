@@ -9,7 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"matcha/api/internal/config"
 	"matcha/api/internal/database"
+	"matcha/api/internal/handlers"
 	"matcha/api/internal/repository"
+	"matcha/api/internal/services"
 )
 
 func main() {
@@ -26,6 +28,8 @@ func main() {
 	}
 
 	userRepo := repository.NewUserRepository(pool)
+	authSvc := services.NewAuthService(userRepo)
+	authHandler := handlers.NewAuthHandler(authSvc)
 
 	r := gin.Default()
 
@@ -37,7 +41,8 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	_ = userRepo // пока не используем
+	r.POST("/api/v1/auth/register", authHandler.Register)
+	r.POST("/api/v1/auth/login", authHandler.Login)
 
 	port := os.Getenv("API_PORT")
 	if port == "" {
