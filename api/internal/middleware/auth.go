@@ -57,5 +57,5 @@ func extractToken(c *gin.Context) string {
 	if strings.HasPrefix(ah, "Bearer ") {
 		return strings.TrimSpace(strings.TrimPrefix(ah, "Bearer "))
 	}
-	return strings.TrimSpace(ah) // токен без префикса Bearer
+	return strings.TrimSpace(ah)
 }

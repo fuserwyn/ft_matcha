@@ -32,17 +32,22 @@ definitions:
   internal_handlers.UpdateProfileReq:
     properties:
       bio:
+        description: max 500 chars
         type: string
       birth_date:
-        description: YYYY-MM-DD
+        description: YYYY-MM-DD, past, 18+
         type: string
       gender:
+        description: male, female, non-binary, other
         type: string
       latitude:
+        description: -90 to 90
         type: number
       longitude:
+        description: -180 to 180
         type: number
       sexual_preference:
+        description: male, female, both, other
         type: string
     type: object
 host: localhost:8080

@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
+	"matcha/api/internal/validation"
 )
 
 type ProfileHandler struct {
@@ -19,12 +20,12 @@ func NewProfileHandler(profileRepo *repository.ProfileRepository) *ProfileHandle
 }
 
 type UpdateProfileReq struct {
-	Bio              *string  `json:"bio"`
-	Gender           *string  `json:"gender"`
-	SexualPreference *string  `json:"sexual_preference"`
-	BirthDate        *string  `json:"birth_date"` // YYYY-MM-DD
-	Latitude         *float64 `json:"latitude"`
-	Longitude        *float64 `json:"longitude"`
+	Bio              *string  `json:"bio"`                // max 500 chars
+	Gender           *string  `json:"gender"`             // male, female, non-binary, other
+	SexualPreference *string  `json:"sexual_preference"`   // male, female, both, other
+	BirthDate        *string  `json:"birth_date"`         // YYYY-MM-DD, past, 18+
+	Latitude         *float64 `json:"latitude"`           // -90 to 90
+	Longitude        *float64 `json:"longitude"`          // -180 to 180
 }
 
 // GetMe godoc
@@ -69,6 +70,45 @@ func (h *ProfileHandler) UpdateMe(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Validation
+	if req.BirthDate != nil && *req.BirthDate != "" {
+		if err := validation.ValidateBirthDate(*req.BirthDate); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	if req.Gender != nil && *req.Gender != "" {
+		if err := validation.ValidateGender(*req.Gender); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	if req.SexualPreference != nil && *req.SexualPreference != "" {
+		if err := validation.ValidateSexualPreference(*req.SexualPreference); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	if req.Bio != nil {
+		if err := validation.ValidateBio(*req.Bio); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	if req.Latitude != nil {
+		if err := validation.ValidateLatitude(*req.Latitude); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	if req.Longitude != nil {
+		if err := validation.ValidateLongitude(*req.Longitude); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
 	p := &repository.Profile{
 		UserID:           id,
 		Bio:              req.Bio,
