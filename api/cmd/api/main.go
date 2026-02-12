@@ -6,12 +6,14 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/gin-gonic/gin"
 	"matcha/api/internal/config"
 	"matcha/api/internal/database"
 	"matcha/api/internal/handlers"
+	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
 	"matcha/api/internal/services"
+
+	"github.com/gin-gonic/gin"
 )
 
 func main() {
@@ -28,21 +30,34 @@ func main() {
 	}
 
 	userRepo := repository.NewUserRepository(pool)
+	profileRepo := repository.NewProfileRepository(pool)
 	authSvc := services.NewAuthService(userRepo)
-	authHandler := handlers.NewAuthHandler(authSvc)
+
+	authH := handlers.NewAuthHandler(authSvc, config.JWTSecret())
+	profileH := handlers.NewProfileHandler(profileRepo)
 
 	r := gin.Default()
 
 	r.GET("/health", func(c *gin.Context) {
 		c.String(http.StatusOK, "OK")
 	})
-
 	r.GET("/api/v1/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	r.POST("/api/v1/auth/register", authHandler.Register)
-	r.POST("/api/v1/auth/login", authHandler.Login)
+	api := r.Group("/api/v1")
+	{
+		api.POST("/auth/register", authH.Register)
+		api.POST("/auth/login", authH.Login)
+		api.GET("/auth/me", middleware.Auth(config.JWTSecret()), authH.Me)
+
+		profile := api.Group("/profile")
+		profile.Use(middleware.Auth(config.JWTSecret()))
+		{
+			profile.GET("/me", profileH.GetMe)
+			profile.PUT("/me", profileH.UpdateMe)
+		}
+	}
 
 	port := os.Getenv("API_PORT")
 	if port == "" {

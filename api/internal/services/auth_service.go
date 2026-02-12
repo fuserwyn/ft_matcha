@@ -54,6 +54,10 @@ func (s *AuthService) Register(ctx context.Context, username, email, password, f
 	return u, nil
 }
 
+func (s *AuthService) GetByID(ctx context.Context, id uuid.UUID) (*repository.User, error) {
+	return s.userRepo.GetByID(ctx, id)
+}
+
 func (s *AuthService) Login(ctx context.Context, username, password string) (*repository.User, error) {
 	u, err := s.userRepo.GetByUsername(ctx, username)
 	if err != nil {

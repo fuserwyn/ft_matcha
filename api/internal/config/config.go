@@ -8,3 +8,10 @@ func DatabaseURL() string {
 	}
 	return "postgres://matcha:matcha_secret@localhost:5432/matcha?sslmode=disable"
 }
+
+func JWTSecret() string {
+	if v := os.Getenv("JWT_SECRET"); v != "" {
+		return v
+	}
+	return "dev_secret"
+}
