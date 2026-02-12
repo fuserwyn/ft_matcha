@@ -50,8 +50,12 @@ func Auth(jwtSecret string) gin.HandlerFunc {
 }
 
 func extractToken(c *gin.Context) string {
-	if ah := c.GetHeader("Authorization"); ah != "" && strings.HasPrefix(ah, "Bearer ") {
-		return strings.TrimPrefix(ah, "Bearer ")
+	ah := c.GetHeader("Authorization")
+	if ah == "" {
+		return ""
 	}
-	return ""
+	if strings.HasPrefix(ah, "Bearer ") {
+		return strings.TrimSpace(strings.TrimPrefix(ah, "Bearer "))
+	}
+	return strings.TrimSpace(ah) // токен без префикса Bearer
 }
