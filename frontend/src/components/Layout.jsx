@@ -20,6 +20,9 @@ export function Layout({ children }) {
           <div className="flex items-center gap-4">
             {user ? (
               <>
+                <Link to="/discover" className="text-slate-600 hover:text-rose-600 transition">
+                  Discover
+                </Link>
                 <Link to="/profile" className="text-slate-600 hover:text-rose-600 transition">
                   Profile
                 </Link>

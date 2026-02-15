@@ -218,6 +218,87 @@ paths:
       summary: Update own profile
       tags:
       - profile
+  /api/v1/users:
+    get:
+      parameters:
+      - description: Filter by gender
+        in: query
+        name: gender
+        type: string
+      - description: Filter by interest (sexual_preference)
+        in: query
+        name: interest
+        type: string
+      - description: Min age
+        in: query
+        name: min_age
+        type: integer
+      - description: Max age
+        in: query
+        name: max_age
+        type: integer
+      - description: Limit (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              items:
+                type: object
+              type: array
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Search users
+      tags:
+      - discovery
+  /api/v1/users/{id}:
+    get:
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: object
+        "401":
+          description: Unauthorized
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get user public profile
+      tags:
+      - discovery
   /health:
     get:
       responses: {}

@@ -67,3 +67,20 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*User, erro
 	}
 	return &u, nil
 }
+
+func (r *UserRepository) ListIDs(ctx context.Context) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id FROM users`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}

@@ -22,3 +22,10 @@ func CORSOrigin() string {
 	}
 	return "http://localhost:3000"
 }
+
+func ElasticsearchURL() string {
+	if v := os.Getenv("ELASTICSEARCH_URL"); v != "" {
+		return v
+	}
+	return "http://localhost:9200"
+}

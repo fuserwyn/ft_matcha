@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
 	"time"
 
@@ -8,15 +9,17 @@ import (
 	"github.com/google/uuid"
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
+	"matcha/api/internal/services"
 	"matcha/api/internal/validation"
 )
 
 type ProfileHandler struct {
 	profileRepo *repository.ProfileRepository
+	syncSvc     *services.SyncService
 }
 
-func NewProfileHandler(profileRepo *repository.ProfileRepository) *ProfileHandler {
-	return &ProfileHandler{profileRepo: profileRepo}
+func NewProfileHandler(profileRepo *repository.ProfileRepository, syncSvc *services.SyncService) *ProfileHandler {
+	return &ProfileHandler{profileRepo: profileRepo, syncSvc: syncSvc}
 }
 
 type UpdateProfileReq struct {
@@ -127,6 +130,9 @@ func (h *ProfileHandler) UpdateMe(c *gin.Context) {
 	if err := h.profileRepo.Upsert(c.Request.Context(), p); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	if err := h.syncSvc.SyncUser(c.Request.Context(), id); err != nil {
+		log.Printf("[profile] sync to ES failed for user=%s: %v", id, err)
 	}
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }

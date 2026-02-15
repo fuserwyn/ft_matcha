@@ -31,3 +31,11 @@ export const profile = {
   get: () => api('/api/v1/profile/me'),
   update: (body) => api('/api/v1/profile/me', { method: 'PUT', body: JSON.stringify(body) }),
 }
+
+export const users = {
+  search: (params) => {
+    const q = new URLSearchParams(params).toString()
+    return api(`/api/v1/users${q ? '?' + q : ''}`)
+  },
+  getById: (id) => api(`/api/v1/users/${id}`),
+}

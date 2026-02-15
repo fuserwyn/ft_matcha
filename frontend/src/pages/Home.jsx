@@ -13,12 +13,20 @@ export default function Home() {
       {user ? (
         <div className="space-y-4">
           <p className="text-slate-600">Welcome, {user.first_name}!</p>
-          <Link
-            to="/profile"
-            className="inline-block px-6 py-3 bg-rose-500 text-white font-medium rounded-lg hover:bg-rose-600 transition"
-          >
-            Edit profile
-          </Link>
+          <div className="flex gap-4 justify-center">
+            <Link
+              to="/discover"
+              className="inline-block px-6 py-3 bg-rose-500 text-white font-medium rounded-lg hover:bg-rose-600 transition"
+            >
+              Discover
+            </Link>
+            <Link
+              to="/profile"
+              className="inline-block px-6 py-3 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition"
+            >
+              Edit profile
+            </Link>
+          </div>
         </div>
       ) : (
         <div className="flex gap-4 justify-center">

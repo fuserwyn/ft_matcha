@@ -15,11 +15,12 @@ import (
 
 type AuthHandler struct {
 	authSvc *services.AuthService
+	syncSvc *services.SyncService
 	secret  string
 }
 
-func NewAuthHandler(authSvc *services.AuthService, jwtSecret string) *AuthHandler {
-	return &AuthHandler{authSvc: authSvc, secret: jwtSecret}
+func NewAuthHandler(authSvc *services.AuthService, syncSvc *services.SyncService, jwtSecret string) *AuthHandler {
+	return &AuthHandler{authSvc: authSvc, syncSvc: syncSvc, secret: jwtSecret}
 }
 
 type RegisterReq struct {
@@ -87,6 +88,9 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 	log.Printf("[auth] register ok: user=%s username=%q", u.ID, u.Username)
+	if err := h.syncSvc.SyncUser(c.Request.Context(), u.ID); err != nil {
+		log.Printf("[auth] sync to ES failed for user=%s: %v", u.ID, err)
+	}
 	c.JSON(http.StatusCreated, gin.H{
 		"token": token,
 		"user": gin.H{

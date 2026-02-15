@@ -6,6 +6,8 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Profile from './pages/Profile'
+import Discovery from './pages/Discovery'
+import UserProfile from './pages/UserProfile'
 
 export default function App() {
   return (
@@ -21,6 +23,22 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <Profile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/discover"
+              element={
+                <ProtectedRoute>
+                  <Discovery />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/users/:id"
+              element={
+                <ProtectedRoute>
+                  <UserProfile />
                 </ProtectedRoute>
               }
             />

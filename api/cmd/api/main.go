@@ -19,8 +19,10 @@ import (
 	"matcha/api/internal/handlers"
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
+	"matcha/api/internal/search"
 	"matcha/api/internal/services"
 
+	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -57,8 +59,26 @@ func main() {
 	profileRepo := repository.NewProfileRepository(pool)
 	authSvc := services.NewAuthService(userRepo)
 
-	authH := handlers.NewAuthHandler(authSvc, config.JWTSecret())
-	profileH := handlers.NewProfileHandler(profileRepo)
+	// Elasticsearch
+	esCfg := elasticsearch.Config{Addresses: []string{config.ElasticsearchURL()}}
+	searchClient, err := search.NewClient(esCfg)
+	if err != nil {
+		log.Fatalf("elasticsearch: %v", err)
+	}
+	if err := searchClient.EnsureIndex(ctx); err != nil {
+		log.Fatalf("elasticsearch index: %v", err)
+	}
+	syncSvc := services.NewSyncService(userRepo, profileRepo, searchClient)
+	if err := syncSvc.ReindexAll(ctx); err != nil {
+		log.Printf("elasticsearch reindex: %v (continuing)", err)
+	}
+	log.Println("Elasticsearch ready")
+
+	discoveryRepo := repository.NewDiscoveryRepository(searchClient)
+
+	authH := handlers.NewAuthHandler(authSvc, syncSvc, config.JWTSecret())
+	profileH := handlers.NewProfileHandler(profileRepo, syncSvc)
+	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, discoveryRepo)
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -83,6 +103,13 @@ func main() {
 		{
 			profile.GET("/me", profileH.GetMe)
 			profile.PUT("/me", profileH.UpdateMe)
+		}
+
+		users := api.Group("/users")
+		users.Use(middleware.Auth(config.JWTSecret()))
+		{
+			users.GET("", discoveryH.Search)
+			users.GET("/:id", discoveryH.GetByID)
 		}
 	}
 
