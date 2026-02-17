@@ -1,6 +1,6 @@
 basePath: /
 definitions:
-  internal_handlers.LoginReq:
+  handlers.LoginReq:
     properties:
       password:
         type: string
@@ -10,7 +10,7 @@ definitions:
     - password
     - username
     type: object
-  internal_handlers.RegisterReq:
+  handlers.RegisterReq:
     properties:
       email:
         type: string
@@ -29,7 +29,7 @@ definitions:
     - password
     - username
     type: object
-  internal_handlers.UpdateProfileReq:
+  handlers.UpdateProfileReq:
     properties:
       bio:
         description: max 500 chars
@@ -67,7 +67,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_handlers.LoginReq'
+          $ref: '#/definitions/handlers.LoginReq'
       produces:
       - application/json
       responses:
@@ -128,7 +128,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_handlers.RegisterReq'
+          $ref: '#/definitions/handlers.RegisterReq'
       produces:
       - application/json
       responses:
@@ -152,6 +152,75 @@ paths:
       summary: Register new user
       tags:
       - auth
+  /api/v1/likes:
+    get:
+      parameters:
+      - description: Limit (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Get users I liked
+      tags:
+      - likes
+  /api/v1/likes/me:
+    get:
+      parameters:
+      - description: Limit (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Get users who liked me
+      tags:
+      - likes
+  /api/v1/matches:
+    get:
+      parameters:
+      - description: Limit (default 20)
+        in: query
+        name: limit
+        type: integer
+      - description: Offset
+        in: query
+        name: offset
+        type: integer
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              type: object
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Get mutual matches
+      tags:
+      - likes
   /api/v1/ping:
     get:
       responses: {}
@@ -186,7 +255,7 @@ paths:
         name: body
         required: true
         schema:
-          $ref: '#/definitions/internal_handlers.UpdateProfileReq'
+          $ref: '#/definitions/handlers.UpdateProfileReq'
       produces:
       - application/json
       responses:
@@ -299,6 +368,64 @@ paths:
       summary: Get user public profile
       tags:
       - discovery
+  /api/v1/users/{id}/like:
+    delete:
+      parameters:
+      - description: User ID to unlike
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "204":
+          description: ""
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Remove like
+      tags:
+      - likes
+    post:
+      parameters:
+      - description: User ID to like
+        in: path
+        name: id
+        required: true
+        type: string
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Like a user
+      tags:
+      - likes
   /health:
     get:
       responses: {}
