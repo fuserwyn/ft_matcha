@@ -20,6 +20,13 @@ func (c *clientConn) writeJSON(v any) error {
 	return c.conn.WriteJSON(v)
 }
 
+func (c *clientConn) writeControl(messageType int, data []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	deadline := time.Now().Add(5 * time.Second)
+	return c.conn.WriteControl(messageType, data, deadline)
+}
+
 type Hub struct {
 	mu      sync.RWMutex
 	clients map[uuid.UUID]map[*clientConn]struct{}

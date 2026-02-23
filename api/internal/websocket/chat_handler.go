@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -25,6 +26,14 @@ type ChatHandler struct {
 	messageRepo *repository.MessageRepository
 	jwtSecret   string
 	upgrader    gws.Upgrader
+
+	rateMu   sync.Mutex
+	rateByID map[uuid.UUID]rateState
+}
+
+type rateState struct {
+	windowStart time.Time
+	count       int
 }
 
 type incomingMessage struct {
@@ -43,6 +52,7 @@ func NewChatHandler(
 		likeRepo:    likeRepo,
 		messageRepo: messageRepo,
 		jwtSecret:   jwtSecret,
+		rateByID:    make(map[uuid.UUID]rateState),
 		upgrader: gws.Upgrader{
 			CheckOrigin: func(_ *http.Request) bool { return true },
 		},
@@ -74,6 +84,10 @@ func (h *ChatHandler) Handle(c *gin.Context) {
 		return conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	})
 
+	stopPing := make(chan struct{})
+	defer close(stopPing)
+	go h.pingLoop(client, stopPing)
+
 	for {
 		var in incomingMessage
 		if err := conn.ReadJSON(&in); err != nil {
@@ -90,6 +104,10 @@ func (h *ChatHandler) Handle(c *gin.Context) {
 }
 
 func (h *ChatHandler) processIncoming(fromUserID uuid.UUID, in incomingMessage) error {
+	if !h.allowMessage(fromUserID) {
+		return errors.New("rate limit exceeded: too many messages")
+	}
+
 	toUserID, err := uuid.Parse(strings.TrimSpace(in.ToUserID))
 	if err != nil {
 		return errors.New("invalid to_user_id")
@@ -155,4 +173,49 @@ func (h *ChatHandler) authenticate(c *gin.Context) (uuid.UUID, error) {
 		return uuid.Nil, errors.New("invalid token")
 	}
 	return claims.UserID, nil
+}
+
+func (h *ChatHandler) pingLoop(client *clientConn, stop <-chan struct{}) {
+	ticker := time.NewTicker(25 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := client.writeControl(gws.PingMessage, []byte("ping")); err != nil {
+				return
+			}
+		case <-stop:
+			return
+		}
+	}
+}
+
+func (h *ChatHandler) allowMessage(userID uuid.UUID) bool {
+	const (
+		maxMessagesPerWindow = 20
+		windowSize           = 10 * time.Second
+	)
+
+	now := time.Now()
+
+	h.rateMu.Lock()
+	defer h.rateMu.Unlock()
+
+	s := h.rateByID[userID]
+	if s.windowStart.IsZero() || now.Sub(s.windowStart) >= windowSize {
+		h.rateByID[userID] = rateState{
+			windowStart: now,
+			count:       1,
+		}
+		return true
+	}
+
+	if s.count >= maxMessagesPerWindow {
+		return false
+	}
+
+	s.count++
+	h.rateByID[userID] = s
+	return true
 }
