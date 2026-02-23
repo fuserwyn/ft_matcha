@@ -58,6 +58,7 @@ func main() {
 	userRepo := repository.NewUserRepository(pool)
 	profileRepo := repository.NewProfileRepository(pool)
 	likeRepo := repository.NewLikeRepository(pool)
+	messageRepo := repository.NewMessageRepository(pool)
 	authSvc := services.NewAuthService(userRepo)
 
 	// Elasticsearch
@@ -81,6 +82,7 @@ func main() {
 	profileH := handlers.NewProfileHandler(profileRepo, syncSvc)
 	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, discoveryRepo)
 	likesH := handlers.NewLikesHandler(likeRepo, userRepo)
+	chatH := handlers.NewChatHandler(messageRepo, likeRepo)
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -114,6 +116,8 @@ func main() {
 			users.GET("/:id", discoveryH.GetByID)
 			users.POST("/:id/like", likesH.Like)
 			users.DELETE("/:id/like", likesH.Unlike)
+			users.POST("/:id/messages", chatH.SendMessage)
+			users.GET("/:id/messages", chatH.GetMessages)
 		}
 
 		api.GET("/likes/me", middleware.Auth(config.JWTSecret()), likesH.GetLikedMe)
