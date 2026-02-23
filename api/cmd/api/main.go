@@ -21,6 +21,7 @@ import (
 	"matcha/api/internal/repository"
 	"matcha/api/internal/search"
 	"matcha/api/internal/services"
+	ws "matcha/api/internal/websocket"
 
 	"github.com/elastic/go-elasticsearch/v8"
 	"github.com/gin-contrib/cors"
@@ -83,6 +84,8 @@ func main() {
 	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, discoveryRepo)
 	likesH := handlers.NewLikesHandler(likeRepo, userRepo)
 	chatH := handlers.NewChatHandler(messageRepo, likeRepo)
+	wsHub := ws.NewHub()
+	wsChatH := ws.NewChatHandler(wsHub, likeRepo, messageRepo, config.JWTSecret())
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -123,6 +126,7 @@ func main() {
 		api.GET("/likes/me", middleware.Auth(config.JWTSecret()), likesH.GetLikedMe)
 		api.GET("/likes", middleware.Auth(config.JWTSecret()), likesH.GetLikedByMe)
 		api.GET("/matches", middleware.Auth(config.JWTSecret()), likesH.GetMatches)
+		api.GET("/ws/chat", wsChatH.Handle)
 	}
 
 	port := os.Getenv("API_PORT")
