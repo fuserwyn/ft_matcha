@@ -23,6 +23,12 @@ export function Layout({ children }) {
                 <Link to="/discover" className="text-slate-600 hover:text-rose-600 transition">
                   Discover
                 </Link>
+                <Link to="/matches" className="text-slate-600 hover:text-rose-600 transition">
+                  Matches
+                </Link>
+                <Link to="/notifications" className="text-slate-600 hover:text-rose-600 transition">
+                  Notifications
+                </Link>
                 <Link to="/profile" className="text-slate-600 hover:text-rose-600 transition">
                   Profile
                 </Link>

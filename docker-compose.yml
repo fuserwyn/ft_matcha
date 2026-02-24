@@ -13,8 +13,10 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET=matcha-photos
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025
+      - SMTP_FROM=noreply@matcha.local
       - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
       - CORS_ORIGIN=http://localhost:3000
     depends_on:
@@ -22,6 +24,12 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
     networks:
       - matcha
 
@@ -110,7 +118,7 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
     ports:
       - "${ELASTICSEARCH_PORT:-9200}:9200"
     volumes:
@@ -133,7 +141,7 @@ services:
 
   minio:
     image: minio/minio:latest
-    command: server /data
+    command: server /data --console-address ":9001"
     environment:
       - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}

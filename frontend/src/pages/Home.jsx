@@ -21,6 +21,12 @@ export default function Home() {
               Discover
             </Link>
             <Link
+              to="/matches"
+              className="inline-block px-6 py-3 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition"
+            >
+              Matches
+            </Link>
+            <Link
               to="/profile"
               className="inline-block px-6 py-3 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition"
             >

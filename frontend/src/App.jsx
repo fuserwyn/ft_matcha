@@ -8,6 +8,9 @@ import Register from './pages/Register'
 import Profile from './pages/Profile'
 import Discovery from './pages/Discovery'
 import UserProfile from './pages/UserProfile'
+import Matches from './pages/Matches'
+import Notifications from './pages/Notifications'
+import Chat from './pages/Chat'
 
 export default function App() {
   return (
@@ -39,6 +42,30 @@ export default function App() {
               element={
                 <ProtectedRoute>
                   <UserProfile />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/matches"
+              element={
+                <ProtectedRoute>
+                  <Matches />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/notifications"
+              element={
+                <ProtectedRoute>
+                  <Notifications />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/chat/:id"
+              element={
+                <ProtectedRoute>
+                  <Chat />
                 </ProtectedRoute>
               }
             />

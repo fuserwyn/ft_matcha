@@ -11,15 +11,17 @@ import (
 )
 
 type DiscoveryHandler struct {
-	userRepo     *repository.UserRepository
-	profileRepo  *repository.ProfileRepository
+	userRepo      *repository.UserRepository
+	profileRepo   *repository.ProfileRepository
+	photoRepo     *repository.PhotoRepository
 	discoveryRepo *repository.DiscoveryRepository
 }
 
-func NewDiscoveryHandler(userRepo *repository.UserRepository, profileRepo *repository.ProfileRepository, discoveryRepo *repository.DiscoveryRepository) *DiscoveryHandler {
+func NewDiscoveryHandler(userRepo *repository.UserRepository, profileRepo *repository.ProfileRepository, photoRepo *repository.PhotoRepository, discoveryRepo *repository.DiscoveryRepository) *DiscoveryHandler {
 	return &DiscoveryHandler{
-		userRepo:     userRepo,
-		profileRepo:  profileRepo,
+		userRepo:      userRepo,
+		profileRepo:   profileRepo,
+		photoRepo:     photoRepo,
 		discoveryRepo: discoveryRepo,
 	}
 }
@@ -77,8 +79,12 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 	}
 
 	result := make([]gin.H, len(cards))
-	for i, c := range cards {
-		result[i] = toUserCardResp(&c)
+	for i, card := range cards {
+		item := toUserCardResp(&card)
+		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
+			item["primary_photo_url"] = p.URL
+		}
+		result[i] = item
 	}
 	c.JSON(http.StatusOK, result)
 }
@@ -108,6 +114,7 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 	}
 
 	p, _ := h.profileRepo.GetByUserID(c.Request.Context(), id)
+	photos, _ := h.photoRepo.ListByUser(c.Request.Context(), id)
 
 	resp := gin.H{
 		"id":         u.ID,
@@ -136,15 +143,30 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 		}
 		resp["fame_rating"] = p.FameRating
 	}
+	if len(photos) > 0 {
+		photoResp := make([]gin.H, len(photos))
+		for i := range photos {
+			photoResp[i] = gin.H{
+				"id":         photos[i].ID,
+				"url":        photos[i].URL,
+				"is_primary": photos[i].IsPrimary,
+				"position":   photos[i].Position,
+			}
+			if photos[i].IsPrimary {
+				resp["primary_photo_url"] = photos[i].URL
+			}
+		}
+		resp["photos"] = photoResp
+	}
 	c.JSON(http.StatusOK, resp)
 }
 
 func toUserCardResp(c *repository.UserCard) gin.H {
 	resp := gin.H{
-		"id":         c.ID,
-		"username":   c.Username,
-		"first_name": c.FirstName,
-		"last_name":  c.LastName,
+		"id":          c.ID,
+		"username":    c.Username,
+		"first_name":  c.FirstName,
+		"last_name":   c.LastName,
 		"fame_rating": c.FameRating,
 	}
 	if c.Gender != nil {
