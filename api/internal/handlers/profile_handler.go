@@ -15,20 +15,21 @@ import (
 
 type ProfileHandler struct {
 	profileRepo *repository.ProfileRepository
+	photoRepo   *repository.PhotoRepository
 	syncSvc     *services.SyncService
 }
 
-func NewProfileHandler(profileRepo *repository.ProfileRepository, syncSvc *services.SyncService) *ProfileHandler {
-	return &ProfileHandler{profileRepo: profileRepo, syncSvc: syncSvc}
+func NewProfileHandler(profileRepo *repository.ProfileRepository, photoRepo *repository.PhotoRepository, syncSvc *services.SyncService) *ProfileHandler {
+	return &ProfileHandler{profileRepo: profileRepo, photoRepo: photoRepo, syncSvc: syncSvc}
 }
 
 type UpdateProfileReq struct {
-	Bio              *string  `json:"bio"`                // max 500 chars
-	Gender           *string  `json:"gender"`             // male, female, non-binary, other
-	SexualPreference *string  `json:"sexual_preference"`   // male, female, both, other
-	BirthDate        *string  `json:"birth_date"`         // YYYY-MM-DD, past, 18+
-	Latitude         *float64 `json:"latitude"`           // -90 to 90
-	Longitude        *float64 `json:"longitude"`          // -180 to 180
+	Bio              *string  `json:"bio"`               // max 500 chars
+	Gender           *string  `json:"gender"`            // male, female, non-binary, other
+	SexualPreference *string  `json:"sexual_preference"` // male, female, both, other
+	BirthDate        *string  `json:"birth_date"`        // YYYY-MM-DD, past, 18+
+	Latitude         *float64 `json:"latitude"`          // -90 to 90
+	Longitude        *float64 `json:"longitude"`         // -180 to 180
 }
 
 // GetMe godoc
@@ -42,15 +43,21 @@ type UpdateProfileReq struct {
 func (h *ProfileHandler) GetMe(c *gin.Context) {
 	userID, _ := c.Get(middleware.UserIDKey)
 	id := userID.(uuid.UUID)
+	photos, _ := h.photoRepo.ListByUser(c.Request.Context(), id)
+
 	p, err := h.profileRepo.GetByUserID(c.Request.Context(), id)
 	if err != nil {
-		c.JSON(http.StatusOK, gin.H{
-			"user_id":      id,
-			"fame_rating":  0,
-		})
+		resp := gin.H{
+			"user_id":     id,
+			"fame_rating": 0,
+		}
+		attachPhotos(resp, photos)
+		c.JSON(http.StatusOK, resp)
 		return
 	}
-	c.JSON(http.StatusOK, toProfileResp(p))
+	resp := toProfileResp(p)
+	attachPhotos(resp, photos)
+	c.JSON(http.StatusOK, resp)
 }
 
 // UpdateMe godoc
@@ -139,10 +146,10 @@ func (h *ProfileHandler) UpdateMe(c *gin.Context) {
 
 func toProfileResp(p *repository.Profile) gin.H {
 	resp := gin.H{
-		"user_id":      p.UserID,
-		"fame_rating":  p.FameRating,
-		"created_at":   p.CreatedAt,
-		"updated_at":   p.UpdatedAt,
+		"user_id":     p.UserID,
+		"fame_rating": p.FameRating,
+		"created_at":  p.CreatedAt,
+		"updated_at":  p.UpdatedAt,
 	}
 	if p.Bio != nil {
 		resp["bio"] = *p.Bio
@@ -163,4 +170,20 @@ func toProfileResp(p *repository.Profile) gin.H {
 		resp["longitude"] = *p.Longitude
 	}
 	return resp
+}
+
+func attachPhotos(resp gin.H, photos []repository.Photo) {
+	photoResp := make([]gin.H, len(photos))
+	for i := range photos {
+		photoResp[i] = gin.H{
+			"id":         photos[i].ID,
+			"url":        photos[i].URL,
+			"is_primary": photos[i].IsPrimary,
+			"position":   photos[i].Position,
+		}
+		if photos[i].IsPrimary {
+			resp["primary_photo_url"] = photos[i].URL
+		}
+	}
+	resp["photos"] = photoResp
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	gws "github.com/gorilla/websocket"
 	"matcha/api/internal/repository"
+	"matcha/api/internal/services"
 )
 
 type wsClaims struct {
@@ -21,11 +22,15 @@ type wsClaims struct {
 }
 
 type ChatHandler struct {
-	hub         *Hub
-	likeRepo    *repository.LikeRepository
-	messageRepo *repository.MessageRepository
-	jwtSecret   string
-	upgrader    gws.Upgrader
+	hub              *Hub
+	likeRepo         *repository.LikeRepository
+	messageRepo      *repository.MessageRepository
+	userRepo         *repository.UserRepository
+	notificationRepo *repository.NotificationRepository
+	presenceRepo     *repository.PresenceRepository
+	mailer           *services.Mailer
+	jwtSecret        string
+	upgrader         gws.Upgrader
 
 	rateMu   sync.Mutex
 	rateByID map[uuid.UUID]rateState
@@ -45,14 +50,22 @@ func NewChatHandler(
 	hub *Hub,
 	likeRepo *repository.LikeRepository,
 	messageRepo *repository.MessageRepository,
+	userRepo *repository.UserRepository,
+	notificationRepo *repository.NotificationRepository,
+	presenceRepo *repository.PresenceRepository,
+	mailer *services.Mailer,
 	jwtSecret string,
 ) *ChatHandler {
 	return &ChatHandler{
-		hub:         hub,
-		likeRepo:    likeRepo,
-		messageRepo: messageRepo,
-		jwtSecret:   jwtSecret,
-		rateByID:    make(map[uuid.UUID]rateState),
+		hub:              hub,
+		likeRepo:         likeRepo,
+		messageRepo:      messageRepo,
+		userRepo:         userRepo,
+		notificationRepo: notificationRepo,
+		presenceRepo:     presenceRepo,
+		mailer:           mailer,
+		jwtSecret:        jwtSecret,
+		rateByID:         make(map[uuid.UUID]rateState),
 		upgrader: gws.Upgrader{
 			CheckOrigin: func(_ *http.Request) bool { return true },
 		},
@@ -73,6 +86,9 @@ func (h *ChatHandler) Handle(c *gin.Context) {
 
 	client := h.hub.Register(userID, conn)
 	defer h.hub.Unregister(userID, client)
+	defer func() {
+		_ = h.presenceRepo.UpsertLastSeen(context.Background(), userID, time.Now().UTC())
+	}()
 
 	h.hub.SendToUser(userID, gin.H{
 		"type": "connected",
@@ -136,6 +152,23 @@ func (h *ChatHandler) processIncoming(fromUserID uuid.UUID, in incomingMessage) 
 	if err != nil {
 		return err
 	}
+	notif, _ := h.notificationRepo.Create(
+		ctx,
+		toUserID,
+		&fromUserID,
+		"message",
+		&msg.ID,
+		"New message from match",
+	)
+	fromUser, _ := h.userRepo.GetByID(ctx, fromUserID)
+	toUser, _ := h.userRepo.GetByID(ctx, toUserID)
+	if fromUser != nil && toUser != nil {
+		_ = h.mailer.Send(
+			toUser.Email,
+			"New message on Matcha",
+			fromUser.FirstName+" "+fromUser.LastName+" sent you a message.",
+		)
+	}
 
 	event := gin.H{
 		"type": "message",
@@ -145,11 +178,29 @@ func (h *ChatHandler) processIncoming(fromUserID uuid.UUID, in incomingMessage) 
 			"receiver_id": msg.ReceiverID,
 			"content":     msg.Content,
 			"created_at":  msg.CreatedAt,
+			"is_read":     msg.IsRead,
+			"read_at":     msg.ReadAt,
 		},
 	}
 
 	h.hub.SendToUser(fromUserID, event)
 	h.hub.SendToUser(toUserID, event)
+	if notif != nil {
+		h.hub.SendToUser(toUserID, gin.H{
+			"type": "notification",
+			"data": gin.H{
+				"id":         notif.ID,
+				"user_id":    notif.UserID,
+				"actor_id":   notif.ActorID,
+				"type":       notif.Type,
+				"entity_id":  notif.EntityID,
+				"content":    notif.Content,
+				"is_read":    notif.IsRead,
+				"created_at": notif.CreatedAt,
+				"read_at":    notif.ReadAt,
+			},
+		})
+	}
 	return nil
 }
 

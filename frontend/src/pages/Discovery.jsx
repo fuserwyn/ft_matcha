@@ -125,6 +125,13 @@ export default function Discovery() {
               to={`/users/${u.id}`}
               className="block p-4 bg-white rounded-lg border border-slate-200 hover:border-rose-300 hover:shadow-md transition"
             >
+              {u.primary_photo_url && (
+                <img
+                  src={u.primary_photo_url}
+                  alt={`${u.first_name} ${u.last_name}`}
+                  className="w-full h-40 object-cover rounded mb-3"
+                />
+              )}
               <div className="font-semibold text-slate-800">
                 {u.first_name} {u.last_name}
               </div>

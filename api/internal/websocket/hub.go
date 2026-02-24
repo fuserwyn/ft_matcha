@@ -78,3 +78,10 @@ func (h *Hub) SendToUser(userID uuid.UUID, payload any) {
 		}
 	}
 }
+
+func (h *Hub) IsOnline(userID uuid.UUID) bool {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	set, ok := h.clients[userID]
+	return ok && len(set) > 0
+}
