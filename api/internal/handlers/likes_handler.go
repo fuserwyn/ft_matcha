@@ -11,12 +11,21 @@ import (
 )
 
 type LikesHandler struct {
-	likeRepo *repository.LikeRepository
-	userRepo *repository.UserRepository
+	likeRepo         *repository.LikeRepository
+	userRepo         *repository.UserRepository
+	notificationRepo *repository.NotificationRepository
 }
 
-func NewLikesHandler(likeRepo *repository.LikeRepository, userRepo *repository.UserRepository) *LikesHandler {
-	return &LikesHandler{likeRepo: likeRepo, userRepo: userRepo}
+func NewLikesHandler(
+	likeRepo *repository.LikeRepository,
+	userRepo *repository.UserRepository,
+	notificationRepo *repository.NotificationRepository,
+) *LikesHandler {
+	return &LikesHandler{
+		likeRepo:         likeRepo,
+		userRepo:         userRepo,
+		notificationRepo: notificationRepo,
+	}
 }
 
 // Like godoc
@@ -65,8 +74,13 @@ func (h *LikesHandler) Like(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	_, _ = h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "like", nil, "You have a new like")
 
 	isMatch, _ := h.likeRepo.IsMatch(c.Request.Context(), myID, likedID)
+	if isMatch {
+		_, _ = h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "match", nil, "It's a match")
+		_, _ = h.notificationRepo.Create(c.Request.Context(), myID, &likedID, "match", nil, "It's a match")
+	}
 	c.JSON(http.StatusCreated, gin.H{
 		"liked_user_id": likedID,
 		"is_match":      isMatch,

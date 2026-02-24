@@ -60,6 +60,8 @@ func main() {
 	profileRepo := repository.NewProfileRepository(pool)
 	likeRepo := repository.NewLikeRepository(pool)
 	messageRepo := repository.NewMessageRepository(pool)
+	notificationRepo := repository.NewNotificationRepository(pool)
+	presenceRepo := repository.NewPresenceRepository(pool)
 	authSvc := services.NewAuthService(userRepo)
 
 	// Elasticsearch
@@ -82,10 +84,12 @@ func main() {
 	authH := handlers.NewAuthHandler(authSvc, syncSvc, config.JWTSecret())
 	profileH := handlers.NewProfileHandler(profileRepo, syncSvc)
 	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, discoveryRepo)
-	likesH := handlers.NewLikesHandler(likeRepo, userRepo)
-	chatH := handlers.NewChatHandler(messageRepo, likeRepo)
+	likesH := handlers.NewLikesHandler(likeRepo, userRepo, notificationRepo)
+	chatH := handlers.NewChatHandler(messageRepo, likeRepo, notificationRepo)
+	notificationsH := handlers.NewNotificationsHandler(notificationRepo)
 	wsHub := ws.NewHub()
-	wsChatH := ws.NewChatHandler(wsHub, likeRepo, messageRepo, config.JWTSecret())
+	wsChatH := ws.NewChatHandler(wsHub, likeRepo, messageRepo, notificationRepo, presenceRepo, config.JWTSecret())
+	presenceH := handlers.NewPresenceHandler(presenceRepo, wsHub)
 
 	r := gin.Default()
 	r.Use(cors.New(cors.Config{
@@ -121,11 +125,15 @@ func main() {
 			users.DELETE("/:id/like", likesH.Unlike)
 			users.POST("/:id/messages", chatH.SendMessage)
 			users.GET("/:id/messages", chatH.GetMessages)
+			users.PATCH("/:id/messages/read", chatH.MarkRead)
 		}
 
 		api.GET("/likes/me", middleware.Auth(config.JWTSecret()), likesH.GetLikedMe)
 		api.GET("/likes", middleware.Auth(config.JWTSecret()), likesH.GetLikedByMe)
 		api.GET("/matches", middleware.Auth(config.JWTSecret()), likesH.GetMatches)
+		api.GET("/notifications", middleware.Auth(config.JWTSecret()), notificationsH.List)
+		api.PATCH("/notifications/read-all", middleware.Auth(config.JWTSecret()), notificationsH.MarkAllRead)
+		api.GET("/presence/:id", middleware.Auth(config.JWTSecret()), presenceH.Get)
 		api.GET("/ws/chat", wsChatH.Handle)
 	}
 
