@@ -11,12 +11,21 @@ import (
 )
 
 type ChatHandler struct {
-	messageRepo *repository.MessageRepository
-	likeRepo    *repository.LikeRepository
+	messageRepo      *repository.MessageRepository
+	likeRepo         *repository.LikeRepository
+	notificationRepo *repository.NotificationRepository
 }
 
-func NewChatHandler(messageRepo *repository.MessageRepository, likeRepo *repository.LikeRepository) *ChatHandler {
-	return &ChatHandler{messageRepo: messageRepo, likeRepo: likeRepo}
+func NewChatHandler(
+	messageRepo *repository.MessageRepository,
+	likeRepo *repository.LikeRepository,
+	notificationRepo *repository.NotificationRepository,
+) *ChatHandler {
+	return &ChatHandler{
+		messageRepo:      messageRepo,
+		likeRepo:         likeRepo,
+		notificationRepo: notificationRepo,
+	}
 }
 
 type SendMessageReq struct {
@@ -78,13 +87,23 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	_, _ = h.notificationRepo.Create(
+		c.Request.Context(),
+		otherID,
+		&myID,
+		"message",
+		&m.ID,
+		"New message from match",
+	)
 
 	c.JSON(http.StatusCreated, gin.H{
-		"id":         m.ID,
-		"sender_id":  m.SenderID,
+		"id":          m.ID,
+		"sender_id":   m.SenderID,
 		"receiver_id": m.ReceiverID,
-		"content":    m.Content,
-		"created_at": m.CreatedAt,
+		"content":     m.Content,
+		"created_at":  m.CreatedAt,
+		"is_read":     m.IsRead,
+		"read_at":     m.ReadAt,
 	})
 }
 
@@ -141,9 +160,53 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 			"receiver_id": m.ReceiverID,
 			"content":     m.Content,
 			"created_at":  m.CreatedAt,
+			"is_read":     m.IsRead,
+			"read_at":     m.ReadAt,
 		}
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+// MarkRead godoc
+// @Summary	Mark messages from user as read
+// @Tags		chat
+// @Security	BearerAuth
+// @Param		id	path		string	true	"Sender user ID"
+// @Success	200	{object}	object
+// @Failure	400	{object}	map[string]string
+// @Failure	403	{object}	map[string]string
+// @Router		/api/v1/users/{id}/messages/read [patch]
+func (h *ChatHandler) MarkRead(c *gin.Context) {
+	userID, _ := c.Get(middleware.UserIDKey)
+	myID := userID.(uuid.UUID)
+
+	otherIDStr := c.Param("id")
+	otherID, err := uuid.Parse(otherIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	if myID == otherID {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	isMatch, err := h.likeRepo.IsMatch(c.Request.Context(), myID, otherID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if !isMatch {
+		c.JSON(http.StatusForbidden, gin.H{"error": "can only mark messages with matches"})
+		return
+	}
+
+	affected, err := h.messageRepo.MarkReadFromSender(c.Request.Context(), myID, otherID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"updated": affected})
 }
 
 func parseLimitOffsetChat(c *gin.Context) (limit, offset int) {
