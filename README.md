@@ -7,7 +7,7 @@ A dating web application that facilitates connections between users—from regis
 | Layer | Technologies |
 |-------|--------------|
 | **Frontend** | React, Vite, Tailwind CSS, React Router |
-| **Backend** | Go, Chi |
+| **Backend** | Go, Gin |
 | **Worker** | Go |
 | **Databases** | PostgreSQL, Neo4j |
 | **Search** | Elasticsearch |
@@ -128,7 +128,7 @@ React is a **JavaScript library** for building user interfaces. When we say "wri
 
 | Component | Technology |
 |-----------|------------|
-| **Framework** | Chi |
+| **Framework** | Gin |
 | **Validation** | go-playground/validator |
 | **Passwords** | bcrypt |
 | **Sessions** | Redis + secure cookie |
@@ -137,11 +137,29 @@ React is a **JavaScript library** for building user interfaces. When we say "wri
 ## Getting Started
 
 1. Copy `.env.example` to `.env` and configure environment variables.
-2. Run `docker-compose up -d` to start all services.
+2. Start the stack: `make up` (or `docker compose up -d`).
 3. Open http://localhost:3000 for the frontend.
 4. API runs at http://localhost:8080.
-5. Neo4j Browser at http://localhost:7474.
-6. MailHog UI at http://localhost:8025.
+5. Neo4j Browser is available at http://localhost:7474.
+6. MailHog UI is available at http://localhost:8025.
+7. MinIO console is available at http://localhost:9001.
+
+## Useful Commands
+
+- `make up` - start all services.
+- `make rebuild` - rebuild and restart services.
+- `make down` - stop the stack.
+- `make ps` - show service status.
+- `make e2e` - run backend end-to-end tests.
+- `make test` - run backend unit/integration tests.
+
+## New Features (MVP)
+
+- Likes and matches with notifications.
+- WebSocket chat with heartbeat and anti-spam.
+- Read/unread messages and presence (`online` / `last_seen`).
+- Photos upload/list/delete/set-primary via MinIO.
+- Email notifications (like/match/message) via MailHog SMTP in development.
 
 ## Security
 

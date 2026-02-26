@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
+	"net/textproto"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -110,6 +113,57 @@ func TestChatPresenceNotificationsE2E(t *testing.T) {
 		t.Fatalf("ws write no-match: %v", err)
 	}
 	waitForErrorContains(t, wsC, "can only message matches", 5*time.Second)
+}
+
+func TestPhotoUploadAndEmailLikeE2E(t *testing.T) {
+	if os.Getenv("RUN_E2E") != "1" {
+		t.Skip("set RUN_E2E=1 to run e2e tests against a running API")
+	}
+
+	base := os.Getenv("E2E_API_BASE")
+	if base == "" {
+		base = "http://localhost:8080"
+	}
+	mailhogBase := os.Getenv("E2E_MAILHOG_BASE")
+	if mailhogBase == "" {
+		mailhogBase = "http://localhost:8025"
+	}
+
+	public := &httpClient{
+		base: strings.TrimRight(base, "/"),
+		c:    &http.Client{Timeout: 10 * time.Second},
+	}
+
+	userA := registerUser(t, public, "pa")
+	userB := registerUser(t, public, "pb")
+	a := &httpClient{base: public.base, token: userA.Token, c: public.c}
+	b := &httpClient{base: public.base, token: userB.Token, c: public.c}
+
+	beforeTotal := readMailhogTotal(t, mailhogBase)
+
+	photoResp := postPhoto(t, a, "/api/v1/photos", "avatar.png", tinyPNG())
+	photoID, _ := photoResp["id"].(string)
+	if photoID == "" {
+		t.Fatalf("expected uploaded photo id, got: %#v", photoResp)
+	}
+	if isPrimary, _ := photoResp["is_primary"].(bool); !isPrimary {
+		t.Fatalf("first uploaded photo must be primary, got: %#v", photoResp)
+	}
+
+	myPhotos := getJSON(t, a, "/api/v1/photos/me")
+	items, _ := myPhotos["items"].([]any)
+	if len(items) == 0 {
+		t.Fatalf("expected at least one photo in /photos/me")
+	}
+
+	publicProfile := getJSON(t, b, "/api/v1/users/"+userA.ID.String())
+	if publicProfile["primary_photo_url"] == nil {
+		t.Fatalf("expected primary_photo_url in public profile: %#v", publicProfile)
+	}
+
+	postNoBody(t, b, "/api/v1/users/"+userA.ID.String()+"/like")
+
+	waitForMailhogTotalAtLeast(t, mailhogBase, beforeTotal+1, 8*time.Second)
 }
 
 type registeredUser struct {
@@ -297,4 +351,102 @@ func waitForErrorContains(t *testing.T, conn *websocket.Conn, contains string, t
 		}
 	}
 	t.Fatalf("did not receive expected error containing %q", contains)
+}
+
+func postPhoto(t *testing.T, c *httpClient, path, filename string, data []byte) map[string]any {
+	t.Helper()
+
+	var body bytes.Buffer
+	w := multipart.NewWriter(&body)
+
+	h := make(textproto.MIMEHeader)
+	h.Set("Content-Disposition", fmt.Sprintf(`form-data; name="file"; filename="%s"`, filename))
+	h.Set("Content-Type", "image/png")
+	part, err := w.CreatePart(h)
+	if err != nil {
+		t.Fatalf("create multipart part: %v", err)
+	}
+	if _, err := part.Write(data); err != nil {
+		t.Fatalf("write multipart data: %v", err)
+	}
+	if err := w.Close(); err != nil {
+		t.Fatalf("close multipart writer: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, c.base+path, &body)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	res, err := c.c.Do(req)
+	if err != nil {
+		t.Fatalf("post photo request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	raw, _ := io.ReadAll(res.Body)
+	if res.StatusCode >= 300 {
+		t.Fatalf("post photo failed: status=%d body=%s", res.StatusCode, string(raw))
+	}
+	var out map[string]any
+	if err := json.Unmarshal(raw, &out); err != nil {
+		t.Fatalf("decode photo response: %v body=%s", err, string(raw))
+	}
+	return out
+}
+
+func tinyPNG() []byte {
+	return []byte{
+		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
+		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+		0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+		0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41,
+		0x54, 0x78, 0x9C, 0x63, 0xF8, 0xCF, 0x00, 0x00,
+		0x02, 0x05, 0x01, 0x02, 0xA2, 0x5D, 0xC6, 0x9B,
+		0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44,
+		0xAE, 0x42, 0x60, 0x82,
+	}
+}
+
+func readMailhogTotal(t *testing.T, mailhogBase string) int {
+	t.Helper()
+	resp, err := http.Get(strings.TrimRight(mailhogBase, "/") + "/api/v2/messages")
+	if err != nil {
+		t.Fatalf("mailhog request failed: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode >= 300 {
+		raw, _ := io.ReadAll(resp.Body)
+		t.Fatalf("mailhog status=%d body=%s", resp.StatusCode, string(raw))
+	}
+	var out map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("decode mailhog response: %v", err)
+	}
+	switch v := out["total"].(type) {
+	case float64:
+		return int(v)
+	case string:
+		n, _ := strconv.Atoi(v)
+		return n
+	default:
+		return 0
+	}
+}
+
+func waitForMailhogTotalAtLeast(t *testing.T, mailhogBase string, minTotal int, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if total := readMailhogTotal(t, mailhogBase); total >= minTotal {
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatalf("mailhog total did not reach %d within %s", minTotal, timeout)
 }
