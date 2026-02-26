@@ -13,10 +13,11 @@ services:
       - MINIO_ENDPOINT=minio:9000
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
-      - MINIO_BUCKET=matcha-photos
+      - MINIO_BUCKET=${MINIO_BUCKET:-matcha-photos}
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025
-      - SMTP_FROM=noreply@matcha.local
+      - SMTP_FROM=${SMTP_FROM:-noreply@matcha.local}
+      - SMTP_COOLDOWN_SECONDS=${SMTP_COOLDOWN_SECONDS:-30}
       - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
       - CORS_ORIGIN=http://localhost:3000
     depends_on:
@@ -118,7 +119,7 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - "ES_JAVA_OPTS=-Xms256m -Xmx256m"
+      - "ES_JAVA_OPTS=${ES_JAVA_OPTS:--Xms256m -Xmx256m}"
     ports:
       - "${ELASTICSEARCH_PORT:-9200}:9200"
     volumes:

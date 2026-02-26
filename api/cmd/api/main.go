@@ -65,7 +65,12 @@ func main() {
 	presenceRepo := repository.NewPresenceRepository(pool)
 	photoRepo := repository.NewPhotoRepository(pool)
 	authSvc := services.NewAuthService(userRepo)
-	mailer := services.NewMailer(config.SMTPHost(), config.SMTPPort(), config.SMTPFrom())
+	mailer := services.NewMailer(
+		config.SMTPHost(),
+		config.SMTPPort(),
+		config.SMTPFrom(),
+		config.SMTPCooldownSeconds(),
+	)
 
 	minioStore, err := storage.NewMinIO(
 		config.MinIOEndpoint(),

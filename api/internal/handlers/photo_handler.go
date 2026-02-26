@@ -1,7 +1,10 @@
 package handlers
 
 import (
+	"bytes"
+	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -12,6 +15,19 @@ import (
 )
 
 const maxPhotosPerUser = 5
+
+var allowedPhotoContentTypes = map[string]bool{
+	"image/jpeg": true,
+	"image/png":  true,
+	"image/webp": true,
+}
+
+var allowedPhotoExtensions = map[string]bool{
+	".jpg":  true,
+	".jpeg": true,
+	".png":  true,
+	".webp": true,
+}
 
 type PhotoHandler struct {
 	photos *repository.PhotoRepository
@@ -55,8 +71,9 @@ func (h *PhotoHandler) UploadMe(c *gin.Context) {
 		return
 	}
 	contentType := strings.TrimSpace(fh.Header.Get("Content-Type"))
-	if !strings.HasPrefix(contentType, "image/") {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "only image files are allowed"})
+	ext := strings.ToLower(filepath.Ext(strings.TrimSpace(fh.Filename)))
+	if !allowedPhotoExtensions[ext] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "allowed file extensions: .jpg, .jpeg, .png, .webp"})
 		return
 	}
 
@@ -67,8 +84,21 @@ func (h *PhotoHandler) UploadMe(c *gin.Context) {
 	}
 	defer file.Close()
 
+	head := make([]byte, 512)
+	n, _ := io.ReadFull(file, head)
+	detectedType := http.DetectContentType(head[:n])
+	if !allowedPhotoContentTypes[detectedType] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "allowed file types: image/jpeg, image/png, image/webp"})
+		return
+	}
+	if contentType != "" && !allowedPhotoContentTypes[contentType] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid content-type header"})
+		return
+	}
+
+	reader := io.MultiReader(bytes.NewReader(head[:n]), file)
 	objectKey := storage.BuildPhotoObjectKey(id.String(), uuid.NewString(), fh.Filename)
-	url, err := h.store.PutObject(c.Request.Context(), objectKey, file, fh.Size, contentType)
+	url, err := h.store.PutObject(c.Request.Context(), objectKey, reader, fh.Size, detectedType)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

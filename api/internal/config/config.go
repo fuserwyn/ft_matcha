@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strconv"
+)
 
 func DatabaseURL() string {
 	if v := os.Getenv("DATABASE_URL"); v != "" {
@@ -77,4 +80,13 @@ func SMTPFrom() string {
 		return v
 	}
 	return "noreply@matcha.local"
+}
+
+func SMTPCooldownSeconds() int {
+	if v := os.Getenv("SMTP_COOLDOWN_SECONDS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return 30
 }

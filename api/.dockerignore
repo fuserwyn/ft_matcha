@@ -1,0 +1,9 @@
+.git
+.idea
+.vscode
+.cursor
+tmp
+bin
+dist
+node_modules
+*.log
