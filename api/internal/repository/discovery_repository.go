@@ -29,7 +29,9 @@ type DiscoveryFilters struct {
 	Gender        string
 	Interest      string
 	Tags          []string
+	StrictTags    bool
 	City          string
+	PreferredCity string
 	MinAge        int
 	MaxAge        int
 	MinFame       int
@@ -58,7 +60,9 @@ func (r *DiscoveryRepository) Search(ctx context.Context, f DiscoveryFilters) ([
 		Gender:        f.Gender,
 		Interest:      f.Interest,
 		Tags:          f.Tags,
+		StrictTags:    f.StrictTags,
 		City:          f.City,
+		PreferredCity: f.PreferredCity,
 		MinAge:        f.MinAge,
 		MaxAge:        f.MaxAge,
 		MinFame:       f.MinFame,

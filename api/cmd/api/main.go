@@ -152,6 +152,8 @@ func main() {
 	r.GET("/health", health)
 	r.GET("/api/v1/ping", ping)
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+	authMw := middleware.Auth(config.JWTSecret())
+	touchPresenceMw := middleware.TouchPresence(presenceRepo)
 
 	api := r.Group("/api/v1")
 	{
@@ -160,11 +162,11 @@ func main() {
 		api.GET("/auth/verify-email", authH.VerifyEmail)
 		api.POST("/auth/forgot-password", authH.ForgotPassword)
 		api.POST("/auth/reset-password", authH.ResetPassword)
-		api.GET("/auth/me", middleware.Auth(config.JWTSecret()), authH.Me)
-		api.PATCH("/auth/me", middleware.Auth(config.JWTSecret()), authH.UpdateMe)
+		api.GET("/auth/me", authMw, touchPresenceMw, authH.Me)
+		api.PATCH("/auth/me", authMw, touchPresenceMw, authH.UpdateMe)
 
 		profile := api.Group("/profile")
-		profile.Use(middleware.Auth(config.JWTSecret()))
+		profile.Use(authMw, touchPresenceMw)
 		{
 			profile.GET("/me", profileH.GetMe)
 			profile.PUT("/me", profileH.UpdateMe)
@@ -175,7 +177,7 @@ func main() {
 		}
 
 		users := api.Group("/users")
-		users.Use(middleware.Auth(config.JWTSecret()))
+		users.Use(authMw, touchPresenceMw)
 		{
 			users.GET("", discoveryH.Search)
 			users.GET("/:id", discoveryH.GetByID)
@@ -191,7 +193,7 @@ func main() {
 		}
 
 		photos := api.Group("/photos")
-		photos.Use(middleware.Auth(config.JWTSecret()))
+		photos.Use(authMw, touchPresenceMw)
 		{
 			photos.GET("/me", photoH.ListMe)
 			photos.POST("", photoH.UploadMe)
@@ -199,13 +201,13 @@ func main() {
 			photos.PATCH("/:id/primary", photoH.SetPrimaryMe)
 		}
 
-		api.GET("/likes/me", middleware.Auth(config.JWTSecret()), likesH.GetLikedMe)
-		api.GET("/likes", middleware.Auth(config.JWTSecret()), likesH.GetLikedByMe)
-		api.GET("/matches", middleware.Auth(config.JWTSecret()), likesH.GetMatches)
-		api.GET("/notifications", middleware.Auth(config.JWTSecret()), notificationsH.List)
-		api.PATCH("/notifications/read-all", middleware.Auth(config.JWTSecret()), notificationsH.MarkAllRead)
-		api.GET("/reports/me", middleware.Auth(config.JWTSecret()), reportsH.ListMyReports)
-		api.GET("/presence/:id", middleware.Auth(config.JWTSecret()), presenceH.Get)
+		api.GET("/likes/me", authMw, touchPresenceMw, likesH.GetLikedMe)
+		api.GET("/likes", authMw, touchPresenceMw, likesH.GetLikedByMe)
+		api.GET("/matches", authMw, touchPresenceMw, likesH.GetMatches)
+		api.GET("/notifications", authMw, touchPresenceMw, notificationsH.List)
+		api.PATCH("/notifications/read-all", authMw, touchPresenceMw, notificationsH.MarkAllRead)
+		api.GET("/reports/me", authMw, touchPresenceMw, reportsH.ListMyReports)
+		api.GET("/presence/:id", authMw, touchPresenceMw, presenceH.Get)
 		api.GET("/ws/chat", wsChatH.Handle)
 	}
 

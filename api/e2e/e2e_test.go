@@ -166,6 +166,62 @@ func TestPhotoUploadAndEmailLikeE2E(t *testing.T) {
 	waitForMailhogTotalAtLeast(t, mailhogBase, beforeTotal+1, 8*time.Second)
 }
 
+func TestBlockSearchVisitAndPresenceE2E(t *testing.T) {
+	if os.Getenv("RUN_E2E") != "1" {
+		t.Skip("set RUN_E2E=1 to run e2e tests against a running API")
+	}
+
+	base := os.Getenv("E2E_API_BASE")
+	if base == "" {
+		base = "http://localhost:8080"
+	}
+	public := &httpClient{
+		base: strings.TrimRight(base, "/"),
+		c:    &http.Client{Timeout: 10 * time.Second},
+	}
+
+	userA := registerUser(t, public, "blk_a")
+	userB := registerUser(t, public, "blk_b")
+	a := &httpClient{base: public.base, token: userA.Token, c: public.c}
+	b := &httpClient{base: public.base, token: userB.Token, c: public.c}
+
+	// Ensure users have photos (like requires primary photo).
+	_ = postPhoto(t, a, "/api/v1/photos", "a.png", tinyPNG())
+	_ = postPhoto(t, b, "/api/v1/photos", "b.png", tinyPNG())
+
+	// Make a match first, then block should disable interactions.
+	postNoBody(t, a, "/api/v1/users/"+userB.ID.String()+"/like")
+	postNoBody(t, b, "/api/v1/users/"+userA.ID.String()+"/like")
+
+	wsB := openWS(t, public.base, userB.Token)
+	defer wsB.Close()
+
+	_ = getJSON(t, a, "/api/v1/users/"+userB.ID.String()) // visit notification for B
+	waitForEvent(t, wsB, "notification", 5*time.Second)
+
+	postNoBody(t, a, "/api/v1/users/"+userB.ID.String()+"/block")
+
+	listA := getJSON(t, a, "/api/v1/users")
+	if containsUser(listA, userB.ID.String()) {
+		t.Fatalf("blocked user B should not appear in A search results: %#v", listA)
+	}
+	listB := getJSON(t, b, "/api/v1/users")
+	if containsUser(listB, userA.ID.String()) {
+		t.Fatalf("user A should not appear in B search results after block: %#v", listB)
+	}
+
+	assertStatusJSON(t, b, http.MethodPost, "/api/v1/users/"+userA.ID.String()+"/messages", map[string]any{
+		"content": "blocked?",
+	}, http.StatusForbidden)
+	assertStatusJSON(t, b, http.MethodPost, "/api/v1/users/"+userA.ID.String()+"/like", map[string]any{}, http.StatusForbidden)
+
+	// Presence last_seen should be available after authenticated API activity.
+	pres := getJSON(t, b, "/api/v1/presence/"+userA.ID.String())
+	if pres["last_seen"] == nil {
+		t.Fatalf("expected presence last_seen after authenticated calls, got: %#v", pres)
+	}
+}
+
 type registeredUser struct {
 	ID    uuid.UUID
 	Token string
@@ -244,6 +300,39 @@ func (c *httpClient) do(method, path string, body any) map[string]any {
 	return out
 }
 
+func (c *httpClient) doWithStatus(method, path string, body any) (int, map[string]any, string) {
+	var r io.Reader
+	if body != nil {
+		b, _ := json.Marshal(body)
+		r = bytes.NewReader(b)
+	}
+	req, err := http.NewRequest(method, c.base+path, r)
+	if err != nil {
+		panic(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+	res, err := c.c.Do(req)
+	if err != nil {
+		panic(err)
+	}
+	defer res.Body.Close()
+	data, _ := io.ReadAll(res.Body)
+	if len(data) == 0 {
+		return res.StatusCode, map[string]any{}, ""
+	}
+	var out map[string]any
+	if data[0] == '[' {
+		var arr []any
+		_ = json.Unmarshal(data, &arr)
+		return res.StatusCode, map[string]any{"items": arr}, string(data)
+	}
+	_ = json.Unmarshal(data, &out)
+	return res.StatusCode, out, string(data)
+}
+
 func postJSON(t *testing.T, c *httpClient, path string, body any) map[string]any {
 	t.Helper()
 	defer func() {
@@ -282,6 +371,19 @@ func getJSON(t *testing.T, c *httpClient, path string) map[string]any {
 		}
 	}()
 	return c.do(http.MethodGet, path, nil)
+}
+
+func assertStatusJSON(t *testing.T, c *httpClient, method, path string, body any, expected int) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("assertStatusJSON panic: %v", r)
+		}
+	}()
+	status, _, raw := c.doWithStatus(method, path, body)
+	if status != expected {
+		t.Fatalf("expected status=%d got=%d path=%s body=%s", expected, status, path, raw)
+	}
 }
 
 func containsUser(resp map[string]any, id string) bool {

@@ -41,7 +41,9 @@ type SearchFilters struct {
 	Gender        string
 	Interest      string
 	Tags          []string
+	StrictTags    bool
 	City          string
+	PreferredCity string
 	MinAge        int
 	MaxAge        int
 	MinFame       int
@@ -182,7 +184,7 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 			"term": map[string]interface{}{"city": f.City},
 		})
 	}
-	if len(f.Tags) > 0 {
+	if len(f.Tags) > 0 && f.StrictTags {
 		must = append(must, map[string]interface{}{
 			"terms": map[string]interface{}{"tags": f.Tags},
 		})
@@ -232,6 +234,66 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 		sortOrder = "asc"
 	}
 	sort := []map[string]interface{}{{"fame_rating": map[string]interface{}{"order": "desc"}}, {"created_at": map[string]interface{}{"order": "desc"}}}
+	queryBody := map[string]interface{}{
+		"bool": map[string]interface{}{"must": must, "must_not": mustNot},
+	}
+	if f.SortBy == "" {
+		functions := []map[string]interface{}{
+			{
+				"field_value_factor": map[string]interface{}{
+					"field":    "fame_rating",
+					"factor":   0.2,
+					"modifier": "sqrt",
+					"missing":  0,
+				},
+				"weight": 2.0,
+			},
+		}
+		if f.UserLat != nil && f.UserLon != nil {
+			functions = append(functions, map[string]interface{}{
+				"gauss": map[string]interface{}{
+					"location": map[string]interface{}{
+						"origin": map[string]interface{}{
+							"lat": *f.UserLat,
+							"lon": *f.UserLon,
+						},
+						"scale": "40km",
+					},
+				},
+				"weight": 3.0,
+			})
+		}
+		if f.PreferredCity != "" {
+			functions = append(functions, map[string]interface{}{
+				"filter": map[string]interface{}{
+					"term": map[string]interface{}{"city": f.PreferredCity},
+				},
+				"weight": 1.5,
+			})
+		}
+		if len(f.Tags) > 0 && !f.StrictTags {
+			for _, tag := range f.Tags {
+				functions = append(functions, map[string]interface{}{
+					"filter": map[string]interface{}{
+						"term": map[string]interface{}{"tags": tag},
+					},
+					"weight": 1.0,
+				})
+			}
+		}
+		queryBody = map[string]interface{}{
+			"function_score": map[string]interface{}{
+				"query":      queryBody,
+				"functions":  functions,
+				"score_mode": "sum",
+				"boost_mode": "sum",
+			},
+		}
+		sort = []map[string]interface{}{
+			{"_score": map[string]interface{}{"order": "desc"}},
+			{"fame_rating": map[string]interface{}{"order": "desc"}},
+		}
+	}
 	switch f.SortBy {
 	case "age":
 		// older age means earlier birth date
@@ -257,12 +319,10 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 	}
 
 	query := map[string]interface{}{
-		"query": map[string]interface{}{
-			"bool": map[string]interface{}{"must": must, "must_not": mustNot},
-		},
-		"sort": sort,
-		"from": f.Offset,
-		"size": f.Limit,
+		"query": queryBody,
+		"sort":  sort,
+		"from":  f.Offset,
+		"size":  f.Limit,
 	}
 	body, err := json.Marshal(query)
 	if err != nil {

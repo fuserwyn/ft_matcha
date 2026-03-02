@@ -88,6 +88,12 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 			f.UserLat = me.Latitude
 			f.UserLon = me.Longitude
 		}
+		if me.City != nil {
+			f.PreferredCity = *me.City
+		}
+		if myTags, err := h.profileRepo.GetTags(c.Request.Context(), id); err == nil {
+			f.Tags = myTags
+		}
 	}
 	if v := c.Query("gender"); v != "" {
 		f.Gender = v
@@ -119,6 +125,8 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 		f.City = v
 	}
 	if v := strings.TrimSpace(c.Query("tags")); v != "" {
+		f.Tags = nil
+		f.StrictTags = true
 		raw := strings.Split(v, ",")
 		for _, t := range raw {
 			t = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(t)), "#")
