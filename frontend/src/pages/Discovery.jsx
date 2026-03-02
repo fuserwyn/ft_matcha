@@ -8,6 +8,7 @@ const INTERESTS = ['male', 'female', 'both', 'other']
 export default function Discovery() {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [filters, setFilters] = useState({
     gender: '',
     interest: '',
@@ -80,9 +81,18 @@ export default function Discovery() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold text-slate-800 mb-6">Discover</h1>
+      <div className="flex items-center justify-between mb-4">
+        <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Discover</h1>
+        <button
+          type="button"
+          onClick={() => setFiltersOpen(!filtersOpen)}
+          className="lg:hidden px-4 py-2 text-sm font-medium text-rose-600 border border-rose-200 rounded-lg hover:bg-rose-50"
+        >
+          {filtersOpen ? 'Hide filters' : 'Filters'}
+        </button>
+      </div>
 
-      <div className="mb-6 p-4 bg-white rounded-lg border border-slate-200">
+      <div className={`mb-6 p-4 bg-white rounded-lg border border-slate-200 ${filtersOpen ? 'block' : 'hidden lg:block'}`}>
         <p className="text-sm font-medium text-slate-700 mb-3">Filters</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <div>
@@ -91,7 +101,7 @@ export default function Discovery() {
               name="gender"
               value={filters.gender}
               onChange={handleFilterChange}
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
+              className="w-full px-3 py-2.5 sm:py-2 rounded border border-slate-200 text-sm min-h-[44px] sm:min-h-0"
             >
               <option value="">Any</option>
               {GENDERS.map((g) => (
@@ -236,21 +246,29 @@ export default function Discovery() {
         <p className="text-slate-500 text-center py-12">No users found</p>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {list.map((u) => (
+          {list.map((u) => {
+            const displayName = (u.first_name && u.last_name && u.first_name === u.last_name)
+              ? u.first_name
+              : [u.first_name, u.last_name].filter(Boolean).join(' ')
+            return (
             <Link
               key={u.id}
               to={`/users/${u.id}`}
-              className="block p-4 bg-white rounded-lg border border-slate-200 hover:border-rose-300 hover:shadow-md transition"
+              className="block p-4 bg-white rounded-xl border border-slate-200 hover:border-rose-300 hover:shadow-md transition active:scale-[0.99]"
             >
-              {u.primary_photo_url && (
+              {u.primary_photo_url ? (
                 <img
                   src={u.primary_photo_url}
-                  alt={`${u.first_name} ${u.last_name}`}
-                  className="w-full h-40 object-cover rounded mb-3"
+                  alt={displayName}
+                  className="w-full h-40 sm:h-36 object-cover rounded-lg mb-3"
                 />
+              ) : (
+                <div className="w-full h-40 sm:h-36 bg-slate-100 rounded-lg mb-3 flex items-center justify-center text-slate-400 text-sm">
+                  No photo
+                </div>
               )}
-              <div className="font-semibold text-slate-800">
-                {u.first_name} {u.last_name}
+              <div className="font-semibold text-slate-800 truncate">
+                {displayName || u.username}
               </div>
               <div className="text-sm text-slate-500">@{u.username}</div>
               {u.gender && (
@@ -262,7 +280,7 @@ export default function Discovery() {
                 </span>
               )}
               {u.bio && (
-                <p className="mt-2 text-sm text-slate-600 line-clamp-2">{u.bio}</p>
+                <p className="mt-2 text-sm text-slate-600 line-clamp-2 break-words">{u.bio}</p>
               )}
               {u.fame_rating > 0 && (
                 <div className="mt-2 text-xs text-rose-500">★ {u.fame_rating}</div>
@@ -278,7 +296,8 @@ export default function Discovery() {
                 </div>
               )}
             </Link>
-          ))}
+            )
+          })}
         </div>
       )}
     </div>
