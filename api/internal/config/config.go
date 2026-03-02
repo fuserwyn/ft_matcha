@@ -61,6 +61,13 @@ func MinIOBucket() string {
 	return "matcha-photos"
 }
 
+func MinIOPublicBaseURL() string {
+	if v := os.Getenv("MINIO_PUBLIC_BASE_URL"); v != "" {
+		return v
+	}
+	return "http://localhost:9000"
+}
+
 func SMTPHost() string {
 	if v := os.Getenv("SMTP_HOST"); v != "" {
 		return v
@@ -89,4 +96,18 @@ func SMTPCooldownSeconds() int {
 		}
 	}
 	return 30
+}
+
+func PublicAPIBaseURL() string {
+	if v := os.Getenv("PUBLIC_API_BASE_URL"); v != "" {
+		return v
+	}
+	return "http://localhost:8080"
+}
+
+func FrontendBaseURL() string {
+	if v := os.Getenv("FRONTEND_BASE_URL"); v != "" {
+		return v
+	}
+	return "http://localhost:3000"
 }

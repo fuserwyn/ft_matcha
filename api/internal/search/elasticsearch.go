@@ -15,17 +15,19 @@ import (
 const IndexName = "matcha_users"
 
 type UserDoc struct {
-	UserID           string   `json:"user_id"`
-	Username         string   `json:"username"`
-	FirstName        string   `json:"first_name"`
-	LastName         string   `json:"last_name"`
-	Gender           string   `json:"gender,omitempty"`
-	SexualPreference string   `json:"sexual_preference,omitempty"`
-	BirthDate        string   `json:"birth_date,omitempty"`
-	Bio              string   `json:"bio,omitempty"`
-	FameRating       int      `json:"fame_rating"`
+	UserID           string    `json:"user_id"`
+	Username         string    `json:"username"`
+	FirstName        string    `json:"first_name"`
+	LastName         string    `json:"last_name"`
+	Gender           string    `json:"gender,omitempty"`
+	SexualPreference string    `json:"sexual_preference,omitempty"`
+	BirthDate        string    `json:"birth_date,omitempty"`
+	Bio              string    `json:"bio,omitempty"`
+	City             string    `json:"city,omitempty"`
+	Tags             []string  `json:"tags,omitempty"`
+	FameRating       int       `json:"fame_rating"`
 	Location         *GeoPoint `json:"location,omitempty"`
-	CreatedAt        string   `json:"created_at"`
+	CreatedAt        string    `json:"created_at"`
 }
 
 type GeoPoint struct {
@@ -34,13 +36,13 @@ type GeoPoint struct {
 }
 
 type SearchFilters struct {
-	ExcludeID   uuid.UUID
-	Gender      string
-	Interest    string
-	MinAge      int
-	MaxAge      int
-	Limit       int
-	Offset      int
+	ExcludeID uuid.UUID
+	Gender    string
+	Interest  string
+	MinAge    int
+	MaxAge    int
+	Limit     int
+	Offset    int
 }
 
 type Client struct {
@@ -76,6 +78,8 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 				"sexual_preference": { "type": "keyword" },
 				"birth_date": { "type": "date", "format": "yyyy-MM-dd" },
 				"bio": { "type": "text" },
+				"city": { "type": "keyword" },
+				"tags": { "type": "keyword" },
 				"fame_rating": { "type": "integer" },
 				"location": { "type": "geo_point" },
 				"created_at": { "type": "date" }

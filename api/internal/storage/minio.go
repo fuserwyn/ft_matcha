@@ -13,13 +13,14 @@ import (
 )
 
 type MinIO struct {
-	client   *minio.Client
-	endpoint string
-	bucket   string
-	useSSL   bool
+	client        *minio.Client
+	endpoint      string
+	bucket        string
+	useSSL        bool
+	publicBaseURL string
 }
 
-func NewMinIO(endpoint, accessKey, secretKey, bucket string) (*MinIO, error) {
+func NewMinIO(endpoint, accessKey, secretKey, bucket, publicBaseURL string) (*MinIO, error) {
 	useSSL := strings.HasPrefix(endpoint, "https://")
 	cleanEndpoint := strings.TrimPrefix(strings.TrimPrefix(endpoint, "http://"), "https://")
 
@@ -32,10 +33,11 @@ func NewMinIO(endpoint, accessKey, secretKey, bucket string) (*MinIO, error) {
 	}
 
 	return &MinIO{
-		client:   client,
-		endpoint: cleanEndpoint,
-		bucket:   bucket,
-		useSSL:   useSSL,
+		client:        client,
+		endpoint:      cleanEndpoint,
+		bucket:        bucket,
+		useSSL:        useSSL,
+		publicBaseURL: strings.TrimRight(strings.TrimSpace(publicBaseURL), "/"),
 	}, nil
 }
 
@@ -45,9 +47,12 @@ func (m *MinIO) EnsureBucket(ctx context.Context) error {
 		return err
 	}
 	if exists {
-		return nil
+		return m.ensurePublicReadPolicy(ctx)
 	}
-	return m.client.MakeBucket(ctx, m.bucket, minio.MakeBucketOptions{})
+	if err := m.client.MakeBucket(ctx, m.bucket, minio.MakeBucketOptions{}); err != nil {
+		return err
+	}
+	return m.ensurePublicReadPolicy(ctx)
 }
 
 func (m *MinIO) PutObject(ctx context.Context, objectKey string, r io.Reader, size int64, contentType string) (string, error) {
@@ -65,6 +70,14 @@ func (m *MinIO) RemoveObject(ctx context.Context, objectKey string) error {
 }
 
 func (m *MinIO) ObjectURL(objectKey string) string {
+	if m.publicBaseURL != "" {
+		base, err := url.Parse(m.publicBaseURL)
+		if err == nil {
+			base.Path = path.Join(base.Path, m.bucket, objectKey)
+			return base.String()
+		}
+	}
+
 	scheme := "http"
 	if m.useSSL {
 		scheme = "https"
@@ -75,6 +88,21 @@ func (m *MinIO) ObjectURL(objectKey string) string {
 		Path:   path.Join("/", m.bucket, objectKey),
 	}
 	return u.String()
+}
+
+func (m *MinIO) ensurePublicReadPolicy(ctx context.Context) error {
+	policy := fmt.Sprintf(`{
+		"Version": "2012-10-17",
+		"Statement": [
+			{
+				"Effect": "Allow",
+				"Principal": {"AWS": ["*"]},
+				"Action": ["s3:GetObject"],
+				"Resource": ["arn:aws:s3:::%s/*"]
+			}
+		]
+	}`, m.bucket)
+	return m.client.SetBucketPolicy(ctx, m.bucket, policy)
 }
 
 func BuildPhotoObjectKey(userID, photoID string, fileName string) string {

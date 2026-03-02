@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
+	"matcha/api/internal/services"
 )
 
 type DiscoveryHandler struct {
@@ -15,14 +16,22 @@ type DiscoveryHandler struct {
 	profileRepo   *repository.ProfileRepository
 	photoRepo     *repository.PhotoRepository
 	discoveryRepo *repository.DiscoveryRepository
+	syncSvc       *services.SyncService
 }
 
-func NewDiscoveryHandler(userRepo *repository.UserRepository, profileRepo *repository.ProfileRepository, photoRepo *repository.PhotoRepository, discoveryRepo *repository.DiscoveryRepository) *DiscoveryHandler {
+func NewDiscoveryHandler(
+	userRepo *repository.UserRepository,
+	profileRepo *repository.ProfileRepository,
+	photoRepo *repository.PhotoRepository,
+	discoveryRepo *repository.DiscoveryRepository,
+	syncSvc *services.SyncService,
+) *DiscoveryHandler {
 	return &DiscoveryHandler{
 		userRepo:      userRepo,
 		profileRepo:   profileRepo,
 		photoRepo:     photoRepo,
 		discoveryRepo: discoveryRepo,
+		syncSvc:       syncSvc,
 	}
 }
 
@@ -100,6 +109,9 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 // @Failure	404	{object}	map[string]string
 // @Router		/api/v1/users/{id} [get]
 func (h *DiscoveryHandler) GetByID(c *gin.Context) {
+	userID, _ := c.Get(middleware.UserIDKey)
+	viewerID := userID.(uuid.UUID)
+
 	idStr := c.Param("id")
 	id, err := uuid.Parse(idStr)
 	if err != nil {
@@ -135,6 +147,9 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 		if p.BirthDate != nil {
 			resp["birth_date"] = p.BirthDate.Format("2006-01-02")
 		}
+		if p.City != nil {
+			resp["city"] = *p.City
+		}
 		if p.Latitude != nil {
 			resp["latitude"] = *p.Latitude
 		}
@@ -142,6 +157,9 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 			resp["longitude"] = *p.Longitude
 		}
 		resp["fame_rating"] = p.FameRating
+	}
+	if tags, err := h.profileRepo.GetTags(c.Request.Context(), id); err == nil {
+		resp["tags"] = tags
 	}
 	if len(photos) > 0 {
 		photoResp := make([]gin.H, len(photos))
@@ -158,6 +176,14 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 		}
 		resp["photos"] = photoResp
 	}
+
+	if viewerID != id {
+		_ = h.profileRepo.AddProfileView(c.Request.Context(), viewerID, id)
+		if _, err := h.profileRepo.RecalculateFameRating(c.Request.Context(), id); err == nil {
+			_ = h.syncSvc.SyncUser(c.Request.Context(), id)
+		}
+	}
+
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -177,6 +203,12 @@ func toUserCardResp(c *repository.UserCard) gin.H {
 	}
 	if c.Bio != nil {
 		resp["bio"] = *c.Bio
+	}
+	if c.City != nil {
+		resp["city"] = *c.City
+	}
+	if len(c.Tags) > 0 {
+		resp["tags"] = c.Tags
 	}
 	if c.Latitude != nil {
 		resp["latitude"] = *c.Latitude
