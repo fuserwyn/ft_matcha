@@ -9,32 +9,42 @@ import (
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
 	"matcha/api/internal/services"
+	ws "matcha/api/internal/websocket"
 )
 
 type LikesHandler struct {
 	likeRepo         *repository.LikeRepository
 	userRepo         *repository.UserRepository
 	profileRepo      *repository.ProfileRepository
+	photoRepo        *repository.PhotoRepository
+	blockRepo        *repository.BlockRepository
 	notificationRepo *repository.NotificationRepository
 	mailer           *services.Mailer
 	syncSvc          *services.SyncService
+	hub              *ws.Hub
 }
 
 func NewLikesHandler(
 	likeRepo *repository.LikeRepository,
 	userRepo *repository.UserRepository,
 	profileRepo *repository.ProfileRepository,
+	photoRepo *repository.PhotoRepository,
+	blockRepo *repository.BlockRepository,
 	notificationRepo *repository.NotificationRepository,
 	mailer *services.Mailer,
 	syncSvc *services.SyncService,
+	hub *ws.Hub,
 ) *LikesHandler {
 	return &LikesHandler{
 		likeRepo:         likeRepo,
 		userRepo:         userRepo,
 		profileRepo:      profileRepo,
+		photoRepo:        photoRepo,
+		blockRepo:        blockRepo,
 		notificationRepo: notificationRepo,
 		mailer:           mailer,
 		syncSvc:          syncSvc,
+		hub:              hub,
 	}
 }
 
@@ -63,6 +73,19 @@ func (h *LikesHandler) Like(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot like yourself"})
 		return
 	}
+	if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), myID); err != nil || p == nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "set profile picture before liking users"})
+		return
+	}
+	isBlocked, err := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, likedID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if isBlocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "cannot like blocked user"})
+		return
+	}
 
 	exists, err := h.userRepo.GetByID(c.Request.Context(), likedID)
 	if err != nil || exists == nil {
@@ -87,7 +110,8 @@ func (h *LikesHandler) Like(c *gin.Context) {
 	if _, err := h.profileRepo.RecalculateFameRating(c.Request.Context(), likedID); err == nil {
 		_ = h.syncSvc.SyncUser(c.Request.Context(), likedID)
 	}
-	_, _ = h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "like", nil, "You have a new like")
+	notif, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "like", nil, "You have a new like")
+	pushNotification(h.hub, likedID, notif)
 	actor, _ := h.userRepo.GetByID(c.Request.Context(), myID)
 	if actor != nil {
 		_ = h.mailer.Send(
@@ -99,8 +123,10 @@ func (h *LikesHandler) Like(c *gin.Context) {
 
 	isMatch, _ := h.likeRepo.IsMatch(c.Request.Context(), myID, likedID)
 	if isMatch {
-		_, _ = h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "match", nil, "It's a match")
-		_, _ = h.notificationRepo.Create(c.Request.Context(), myID, &likedID, "match", nil, "It's a match")
+		n1, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "match", nil, "It's a match")
+		n2, _ := h.notificationRepo.Create(c.Request.Context(), myID, &likedID, "match", nil, "It's a match")
+		pushNotification(h.hub, likedID, n1)
+		pushNotification(h.hub, myID, n2)
 		_ = h.mailer.Send(exists.Email, "It's a match on Matcha", "You have a new match.")
 		if actor != nil {
 			_ = h.mailer.Send(actor.Email, "It's a match on Matcha", "You have a new match.")
@@ -132,6 +158,11 @@ func (h *LikesHandler) Unlike(c *gin.Context) {
 	}
 
 	_ = h.likeRepo.Delete(c.Request.Context(), myID, likedID)
+	isBlocked, _ := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, likedID)
+	if !isBlocked {
+		n, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "unlike", nil, "A user unliked you")
+		pushNotification(h.hub, likedID, n)
+	}
 	if _, err := h.profileRepo.RecalculateFameRating(c.Request.Context(), likedID); err == nil {
 		_ = h.syncSvc.SyncUser(c.Request.Context(), likedID)
 	}
@@ -233,4 +264,24 @@ func parseLimitOffset(c *gin.Context) (limit, offset int) {
 		}
 	}
 	return limit, offset
+}
+
+func pushNotification(hub *ws.Hub, userID uuid.UUID, n *repository.Notification) {
+	if hub == nil || n == nil {
+		return
+	}
+	hub.SendToUser(userID, gin.H{
+		"type": "notification",
+		"data": gin.H{
+			"id":         n.ID,
+			"user_id":    n.UserID,
+			"actor_id":   n.ActorID,
+			"type":       n.Type,
+			"entity_id":  n.EntityID,
+			"content":    n.Content,
+			"is_read":    n.IsRead,
+			"created_at": n.CreatedAt,
+			"read_at":    n.ReadAt,
+		},
+	})
 }

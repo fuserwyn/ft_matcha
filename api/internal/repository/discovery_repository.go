@@ -24,13 +24,23 @@ type UserCard struct {
 }
 
 type DiscoveryFilters struct {
-	ExcludeID uuid.UUID
-	Gender    string
-	Interest  string
-	MinAge    int
-	MaxAge    int
-	Limit     int
-	Offset    int
+	ExcludeID     uuid.UUID
+	ExcludeIDs    []uuid.UUID
+	Gender        string
+	Interest      string
+	Tags          []string
+	City          string
+	MinAge        int
+	MaxAge        int
+	MinFame       int
+	MaxFame       int
+	UserLat       *float64
+	UserLon       *float64
+	MaxDistanceKm int
+	SortBy        string
+	SortOrder     string
+	Limit         int
+	Offset        int
 }
 
 func NewDiscoveryRepository(searchClient *search.Client) *DiscoveryRepository {
@@ -43,13 +53,23 @@ type DiscoveryRepository struct {
 
 func (r *DiscoveryRepository) Search(ctx context.Context, f DiscoveryFilters) ([]UserCard, error) {
 	sf := search.SearchFilters{
-		ExcludeID: f.ExcludeID,
-		Gender:    f.Gender,
-		Interest:  f.Interest,
-		MinAge:    f.MinAge,
-		MaxAge:    f.MaxAge,
-		Limit:     f.Limit,
-		Offset:    f.Offset,
+		ExcludeID:     f.ExcludeID,
+		ExcludeIDs:    f.ExcludeIDs,
+		Gender:        f.Gender,
+		Interest:      f.Interest,
+		Tags:          f.Tags,
+		City:          f.City,
+		MinAge:        f.MinAge,
+		MaxAge:        f.MaxAge,
+		MinFame:       f.MinFame,
+		MaxFame:       f.MaxFame,
+		UserLat:       f.UserLat,
+		UserLon:       f.UserLon,
+		MaxDistanceKm: f.MaxDistanceKm,
+		SortBy:        f.SortBy,
+		SortOrder:     f.SortOrder,
+		Limit:         f.Limit,
+		Offset:        f.Offset,
 	}
 	docs, err := r.search.Search(ctx, sf)
 	if err != nil {

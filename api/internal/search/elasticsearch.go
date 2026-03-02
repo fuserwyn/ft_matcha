@@ -36,13 +36,23 @@ type GeoPoint struct {
 }
 
 type SearchFilters struct {
-	ExcludeID uuid.UUID
-	Gender    string
-	Interest  string
-	MinAge    int
-	MaxAge    int
-	Limit     int
-	Offset    int
+	ExcludeID     uuid.UUID
+	ExcludeIDs    []uuid.UUID
+	Gender        string
+	Interest      string
+	Tags          []string
+	City          string
+	MinAge        int
+	MaxAge        int
+	MinFame       int
+	MaxFame       int
+	UserLat       *float64
+	UserLon       *float64
+	MaxDistanceKm int
+	SortBy        string
+	SortOrder     string
+	Limit         int
+	Offset        int
 }
 
 type Client struct {
@@ -146,12 +156,16 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 		f.Limit = 20
 	}
 
-	must := []map[string]interface{}{
-		{"bool": map[string]interface{}{
-			"must_not": []map[string]interface{}{
-				{"term": map[string]interface{}{"user_id": f.ExcludeID.String()}},
-			},
-		}},
+	must := []map[string]interface{}{}
+	mustNot := []map[string]interface{}{
+		{"term": map[string]interface{}{"user_id": f.ExcludeID.String()}},
+	}
+	for _, id := range f.ExcludeIDs {
+		if id != uuid.Nil {
+			mustNot = append(mustNot, map[string]interface{}{
+				"term": map[string]interface{}{"user_id": id.String()},
+			})
+		}
 	}
 	if f.Gender != "" {
 		must = append(must, map[string]interface{}{
@@ -161,6 +175,16 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 	if f.Interest != "" {
 		must = append(must, map[string]interface{}{
 			"term": map[string]interface{}{"sexual_preference": f.Interest},
+		})
+	}
+	if f.City != "" {
+		must = append(must, map[string]interface{}{
+			"term": map[string]interface{}{"city": f.City},
+		})
+	}
+	if len(f.Tags) > 0 {
+		must = append(must, map[string]interface{}{
+			"terms": map[string]interface{}{"tags": f.Tags},
 		})
 	}
 	if f.MinAge > 0 {
@@ -179,15 +203,64 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 			},
 		})
 	}
+	if f.MinFame > 0 || f.MaxFame > 0 {
+		rng := map[string]interface{}{}
+		if f.MinFame > 0 {
+			rng["gte"] = f.MinFame
+		}
+		if f.MaxFame > 0 {
+			rng["lte"] = f.MaxFame
+		}
+		must = append(must, map[string]interface{}{
+			"range": map[string]interface{}{"fame_rating": rng},
+		})
+	}
+	if f.MaxDistanceKm > 0 && f.UserLat != nil && f.UserLon != nil {
+		must = append(must, map[string]interface{}{
+			"geo_distance": map[string]interface{}{
+				"distance": fmt.Sprintf("%dkm", f.MaxDistanceKm),
+				"location": map[string]interface{}{
+					"lat": *f.UserLat,
+					"lon": *f.UserLon,
+				},
+			},
+		})
+	}
+
+	sortOrder := "desc"
+	if f.SortOrder == "asc" {
+		sortOrder = "asc"
+	}
+	sort := []map[string]interface{}{{"fame_rating": map[string]interface{}{"order": "desc"}}, {"created_at": map[string]interface{}{"order": "desc"}}}
+	switch f.SortBy {
+	case "age":
+		// older age means earlier birth date
+		if sortOrder == "asc" {
+			sort = []map[string]interface{}{{"birth_date": map[string]interface{}{"order": "desc"}}}
+		} else {
+			sort = []map[string]interface{}{{"birth_date": map[string]interface{}{"order": "asc"}}}
+		}
+	case "fame":
+		sort = []map[string]interface{}{{"fame_rating": map[string]interface{}{"order": sortOrder}}}
+	case "location":
+		if f.UserLat != nil && f.UserLon != nil {
+			sort = []map[string]interface{}{
+				{
+					"_geo_distance": map[string]interface{}{
+						"location": map[string]interface{}{"lat": *f.UserLat, "lon": *f.UserLon},
+						"order":    sortOrder,
+						"unit":     "km",
+					},
+				},
+			}
+		}
+	}
 
 	query := map[string]interface{}{
 		"query": map[string]interface{}{
-			"bool": map[string]interface{}{"must": must},
+			"bool": map[string]interface{}{"must": must, "must_not": mustNot},
 		},
-		"sort": []map[string]interface{}{
-			{"fame_rating": map[string]interface{}{"order": "desc"}},
-			{"created_at": map[string]interface{}{"order": "desc"}},
-		},
+		"sort": sort,
 		"from": f.Offset,
 		"size": f.Limit,
 	}

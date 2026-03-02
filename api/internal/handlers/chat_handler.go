@@ -16,6 +16,7 @@ type ChatHandler struct {
 	messageRepo      *repository.MessageRepository
 	likeRepo         *repository.LikeRepository
 	userRepo         *repository.UserRepository
+	blockRepo        *repository.BlockRepository
 	notificationRepo *repository.NotificationRepository
 	mailer           *services.Mailer
 	hub              *ws.Hub
@@ -25,6 +26,7 @@ func NewChatHandler(
 	messageRepo *repository.MessageRepository,
 	likeRepo *repository.LikeRepository,
 	userRepo *repository.UserRepository,
+	blockRepo *repository.BlockRepository,
 	notificationRepo *repository.NotificationRepository,
 	mailer *services.Mailer,
 	hub *ws.Hub,
@@ -33,6 +35,7 @@ func NewChatHandler(
 		messageRepo:      messageRepo,
 		likeRepo:         likeRepo,
 		userRepo:         userRepo,
+		blockRepo:        blockRepo,
 		notificationRepo: notificationRepo,
 		mailer:           mailer,
 		hub:              hub,
@@ -81,6 +84,15 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "can only message matches"})
 		return
 	}
+	isBlocked, err := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, otherID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if isBlocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "cannot message blocked user"})
+		return
+	}
 
 	var req SendMessageReq
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -98,7 +110,7 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	_, _ = h.notificationRepo.Create(
+	notif, _ := h.notificationRepo.Create(
 		c.Request.Context(),
 		otherID,
 		&myID,
@@ -130,6 +142,22 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		}
 		h.hub.SendToUser(myID, event)
 		h.hub.SendToUser(otherID, event)
+		if notif != nil {
+			h.hub.SendToUser(otherID, gin.H{
+				"type": "notification",
+				"data": gin.H{
+					"id":         notif.ID,
+					"user_id":    notif.UserID,
+					"actor_id":   notif.ActorID,
+					"type":       notif.Type,
+					"entity_id":  notif.EntityID,
+					"content":    notif.Content,
+					"is_read":    notif.IsRead,
+					"created_at": notif.CreatedAt,
+					"read_at":    notif.ReadAt,
+				},
+			})
+		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
@@ -177,6 +205,15 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 	}
 	if !isMatch {
 		c.JSON(http.StatusForbidden, gin.H{"error": "can only view messages with matches"})
+		return
+	}
+	isBlocked, err := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, otherID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if isBlocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "cannot view messages with blocked user"})
 		return
 	}
 
@@ -234,6 +271,15 @@ func (h *ChatHandler) MarkRead(c *gin.Context) {
 	}
 	if !isMatch {
 		c.JSON(http.StatusForbidden, gin.H{"error": "can only mark messages with matches"})
+		return
+	}
+	isBlocked, err := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, otherID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	if isBlocked {
+		c.JSON(http.StatusForbidden, gin.H{"error": "cannot mark messages with blocked user"})
 		return
 	}
 

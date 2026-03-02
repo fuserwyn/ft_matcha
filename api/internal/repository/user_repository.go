@@ -141,3 +141,15 @@ func (r *UserRepository) MarkPasswordResetTokenUsed(ctx context.Context, tokenHa
 	`, tokenHash)
 	return err
 }
+
+func (r *UserRepository) UpdateAccount(ctx context.Context, userID uuid.UUID, username, email, firstName, lastName string) error {
+	_, err := r.pool.Exec(ctx, `
+		UPDATE users
+		SET username = $2,
+		    email = $3,
+		    first_name = $4,
+		    last_name = $5
+		WHERE id = $1
+	`, userID, username, email, firstName, lastName)
+	return err
+}

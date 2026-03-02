@@ -163,6 +163,33 @@ func (r *ProfileRepository) GetTags(ctx context.Context, userID uuid.UUID) ([]st
 	return tags, rows.Err()
 }
 
+func (r *ProfileRepository) ListTopTags(ctx context.Context, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT t.name
+		FROM user_tags ut
+		JOIN tags t ON t.id = ut.tag_id
+		GROUP BY t.name
+		ORDER BY COUNT(*) DESC, t.name ASC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tags []string
+	for rows.Next() {
+		var tag string
+		if err := rows.Scan(&tag); err != nil {
+			return nil, err
+		}
+		tags = append(tags, tag)
+	}
+	return tags, rows.Err()
+}
+
 func (r *ProfileRepository) AddProfileView(ctx context.Context, viewerUserID, viewedUserID uuid.UUID) error {
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO profile_views (viewer_user_id, viewed_user_id)

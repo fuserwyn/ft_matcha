@@ -63,6 +63,13 @@ type ResetPasswordReq struct {
 	NewPassword string `json:"new_password" binding:"required"`
 }
 
+type UpdateAccountReq struct {
+	Username  string `json:"username" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	FirstName string `json:"first_name" binding:"required"`
+	LastName  string `json:"last_name" binding:"required"`
+}
+
 // Register godoc
 // @Summary	Register new user
 // @Tags		auth
@@ -260,6 +267,10 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 	u, err := h.authSvc.Login(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
+		if err == services.ErrEmailNotVerified {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "email not verified"})
+			return
+		}
 		log.Printf("[auth] login failed for username=%q: %v", req.Username, err)
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credentials"})
 		return
@@ -281,6 +292,29 @@ func (h *AuthHandler) Login(c *gin.Context) {
 			"last_name":  u.LastName,
 		},
 	})
+}
+
+func (h *AuthHandler) UpdateMe(c *gin.Context) {
+	userID, _ := c.Get(middleware.UserIDKey)
+	id := userID.(uuid.UUID)
+	var req UpdateAccountReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.authSvc.UpdateAccount(c.Request.Context(), id, req.Username, req.Email, req.FirstName, req.LastName); err != nil {
+		if err == services.ErrUserExists {
+			c.JSON(http.StatusConflict, gin.H{"error": "user exists"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := h.syncSvc.SyncUser(c.Request.Context(), id); err != nil {
+		log.Printf("[auth] sync to ES failed for user=%s: %v", id, err)
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
 // Me godoc

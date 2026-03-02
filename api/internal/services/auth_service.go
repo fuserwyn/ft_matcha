@@ -17,6 +17,7 @@ import (
 var ErrInvalidPassword = errors.New("invalid password")
 var ErrUserExists = errors.New("user exists")
 var ErrInvalidResetToken = errors.New("invalid reset token")
+var ErrEmailNotVerified = errors.New("email not verified")
 
 func NewAuthService(userRepo *repository.UserRepository) *AuthService {
 	return &AuthService{userRepo: userRepo}
@@ -74,7 +75,33 @@ func (s *AuthService) Login(ctx context.Context, username, password string) (*re
 	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(password)); err != nil {
 		return nil, ErrInvalidPassword
 	}
+	if !u.EmailVerifiedAt.Valid {
+		return nil, ErrEmailNotVerified
+	}
 	return u, nil
+}
+
+func (s *AuthService) UpdateAccount(ctx context.Context, userID uuid.UUID, username, email, firstName, lastName string) error {
+	if err := validation.ValidateUsername(username); err != nil {
+		return err
+	}
+	if err := validation.ValidateEmail(email); err != nil {
+		return err
+	}
+	if err := validation.ValidateName(firstName, "first_name"); err != nil {
+		return err
+	}
+	if err := validation.ValidateName(lastName, "last_name"); err != nil {
+		return err
+	}
+
+	if u, err := s.userRepo.GetByUsername(ctx, username); err == nil && u.ID != userID {
+		return ErrUserExists
+	}
+	if u, err := s.userRepo.GetByEmail(ctx, email); err == nil && u.ID != userID {
+		return ErrUserExists
+	}
+	return s.userRepo.UpdateAccount(ctx, userID, username, email, firstName, lastName)
 }
 
 func (s *AuthService) VerifyEmail(ctx context.Context, userID uuid.UUID) error {

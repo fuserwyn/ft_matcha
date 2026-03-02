@@ -280,6 +280,15 @@ func (h *ProfileHandler) GetViewedHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+func (h *ProfileHandler) TagSuggestions(c *gin.Context) {
+	tags, err := h.profileRepo.ListTopTags(c.Request.Context(), 20)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"tags": tags})
+}
+
 func toProfileResp(p *repository.Profile) gin.H {
 	resp := gin.H{
 		"user_id":     p.UserID,

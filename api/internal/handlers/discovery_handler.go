@@ -3,35 +3,49 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
 	"matcha/api/internal/services"
+	ws "matcha/api/internal/websocket"
 )
 
 type DiscoveryHandler struct {
 	userRepo      *repository.UserRepository
 	profileRepo   *repository.ProfileRepository
 	photoRepo     *repository.PhotoRepository
+	likeRepo      *repository.LikeRepository
+	blockRepo     *repository.BlockRepository
+	notifRepo     *repository.NotificationRepository
 	discoveryRepo *repository.DiscoveryRepository
 	syncSvc       *services.SyncService
+	hub           *ws.Hub
 }
 
 func NewDiscoveryHandler(
 	userRepo *repository.UserRepository,
 	profileRepo *repository.ProfileRepository,
 	photoRepo *repository.PhotoRepository,
+	likeRepo *repository.LikeRepository,
+	blockRepo *repository.BlockRepository,
+	notifRepo *repository.NotificationRepository,
 	discoveryRepo *repository.DiscoveryRepository,
 	syncSvc *services.SyncService,
+	hub *ws.Hub,
 ) *DiscoveryHandler {
 	return &DiscoveryHandler{
 		userRepo:      userRepo,
 		profileRepo:   profileRepo,
 		photoRepo:     photoRepo,
+		likeRepo:      likeRepo,
+		blockRepo:     blockRepo,
+		notifRepo:     notifRepo,
 		discoveryRepo: discoveryRepo,
 		syncSvc:       syncSvc,
+		hub:           hub,
 	}
 }
 
@@ -54,6 +68,27 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 	id := userID.(uuid.UUID)
 
 	f := repository.DiscoveryFilters{ExcludeID: id, Limit: 20}
+	if blockedIDs, err := h.blockRepo.ListBlockedIDs(c.Request.Context(), id); err == nil {
+		f.ExcludeIDs = blockedIDs
+	}
+
+	if me, err := h.profileRepo.GetByUserID(c.Request.Context(), id); err == nil && me != nil {
+		// If sexual orientation is not specified, user is treated as bisexual.
+		preference := "both"
+		if me.SexualPreference != nil && *me.SexualPreference != "" {
+			preference = *me.SexualPreference
+		}
+		if preference != "both" {
+			f.Gender = preference
+		}
+		if me.Gender != nil && *me.Gender != "" {
+			f.Interest = *me.Gender
+		}
+		if me.Latitude != nil && me.Longitude != nil {
+			f.UserLat = me.Latitude
+			f.UserLon = me.Longitude
+		}
+	}
 	if v := c.Query("gender"); v != "" {
 		f.Gender = v
 	}
@@ -69,6 +104,39 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 		if n, err := strconv.Atoi(v); err == nil {
 			f.MaxAge = n
 		}
+	}
+	if v := c.Query("min_fame"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			f.MinFame = n
+		}
+	}
+	if v := c.Query("max_fame"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			f.MaxFame = n
+		}
+	}
+	if v := strings.TrimSpace(c.Query("city")); v != "" {
+		f.City = v
+	}
+	if v := strings.TrimSpace(c.Query("tags")); v != "" {
+		raw := strings.Split(v, ",")
+		for _, t := range raw {
+			t = strings.TrimPrefix(strings.ToLower(strings.TrimSpace(t)), "#")
+			if t != "" {
+				f.Tags = append(f.Tags, t)
+			}
+		}
+	}
+	if v := c.Query("max_distance_km"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			f.MaxDistanceKm = n
+		}
+	}
+	if v := c.Query("sort_by"); v != "" {
+		f.SortBy = v
+	}
+	if v := c.Query("sort_order"); v != "" {
+		f.SortOrder = v
 	}
 	if v := c.Query("limit"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 50 {
@@ -178,9 +246,27 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 	}
 
 	if viewerID != id {
+		isBlocked, _ := h.blockRepo.IsBlockedEither(c.Request.Context(), viewerID, id)
+		if isBlocked {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
 		_ = h.profileRepo.AddProfileView(c.Request.Context(), viewerID, id)
+		notif, _ := h.notifRepo.Create(c.Request.Context(), id, &viewerID, "visit", nil, "Someone visited your profile")
+		pushNotification(h.hub, id, notif)
 		if _, err := h.profileRepo.RecalculateFameRating(c.Request.Context(), id); err == nil {
 			_ = h.syncSvc.SyncUser(c.Request.Context(), id)
+		}
+	}
+	if viewerID != id {
+		if likedMe, err := h.likeRepo.Exists(c.Request.Context(), id, viewerID); err == nil {
+			resp["liked_me"] = likedMe
+		}
+		if iLiked, err := h.likeRepo.Exists(c.Request.Context(), viewerID, id); err == nil {
+			resp["i_liked"] = iLiked
+		}
+		if isMatch, err := h.likeRepo.IsMatch(c.Request.Context(), viewerID, id); err == nil {
+			resp["is_match"] = isMatch
 		}
 	}
 

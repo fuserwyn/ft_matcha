@@ -26,6 +26,7 @@ type ChatHandler struct {
 	likeRepo         *repository.LikeRepository
 	messageRepo      *repository.MessageRepository
 	userRepo         *repository.UserRepository
+	blockRepo        *repository.BlockRepository
 	notificationRepo *repository.NotificationRepository
 	presenceRepo     *repository.PresenceRepository
 	mailer           *services.Mailer
@@ -51,6 +52,7 @@ func NewChatHandler(
 	likeRepo *repository.LikeRepository,
 	messageRepo *repository.MessageRepository,
 	userRepo *repository.UserRepository,
+	blockRepo *repository.BlockRepository,
 	notificationRepo *repository.NotificationRepository,
 	presenceRepo *repository.PresenceRepository,
 	mailer *services.Mailer,
@@ -61,6 +63,7 @@ func NewChatHandler(
 		likeRepo:         likeRepo,
 		messageRepo:      messageRepo,
 		userRepo:         userRepo,
+		blockRepo:        blockRepo,
 		notificationRepo: notificationRepo,
 		presenceRepo:     presenceRepo,
 		mailer:           mailer,
@@ -146,6 +149,13 @@ func (h *ChatHandler) processIncoming(fromUserID uuid.UUID, in incomingMessage) 
 	}
 	if !isMatch {
 		return errors.New("can only message matches")
+	}
+	isBlocked, err := h.blockRepo.IsBlockedEither(ctx, fromUserID, toUserID)
+	if err != nil {
+		return err
+	}
+	if isBlocked {
+		return errors.New("cannot message blocked user")
 	}
 
 	msg, err := h.messageRepo.Create(ctx, fromUserID, toUserID, content)

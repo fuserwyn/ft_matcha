@@ -63,6 +63,7 @@ func main() {
 	messageRepo := repository.NewMessageRepository(pool)
 	notificationRepo := repository.NewNotificationRepository(pool)
 	reportRepo := repository.NewReportRepository(pool)
+	blockRepo := repository.NewBlockRepository(pool)
 	presenceRepo := repository.NewPresenceRepository(pool)
 	photoRepo := repository.NewPhotoRepository(pool)
 	authSvc := services.NewAuthService(userRepo)
@@ -124,15 +125,16 @@ func main() {
 		config.PublicAPIBaseURL(),
 		config.FrontendBaseURL(),
 	)
-	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, syncSvc)
-	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, discoveryRepo, syncSvc)
-	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, notificationRepo, mailer, syncSvc)
 	wsHub := ws.NewHub()
-	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, notificationRepo, mailer, wsHub)
+	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, syncSvc)
+	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, likeRepo, blockRepo, notificationRepo, discoveryRepo, syncSvc, wsHub)
+	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, photoRepo, blockRepo, notificationRepo, mailer, syncSvc, wsHub)
+	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, blockRepo, notificationRepo, mailer, wsHub)
 	photoH := handlers.NewPhotoHandler(photoRepo, minioStore)
 	notificationsH := handlers.NewNotificationsHandler(notificationRepo)
 	reportsH := handlers.NewReportsHandler(reportRepo, userRepo)
-	wsChatH := ws.NewChatHandler(wsHub, likeRepo, messageRepo, userRepo, notificationRepo, presenceRepo, mailer, config.JWTSecret())
+	blocksH := handlers.NewBlocksHandler(blockRepo, userRepo)
+	wsChatH := ws.NewChatHandler(wsHub, likeRepo, messageRepo, userRepo, blockRepo, notificationRepo, presenceRepo, mailer, config.JWTSecret())
 	presenceH := handlers.NewPresenceHandler(presenceRepo, wsHub)
 
 	r := gin.Default()
@@ -159,6 +161,7 @@ func main() {
 		api.POST("/auth/forgot-password", authH.ForgotPassword)
 		api.POST("/auth/reset-password", authH.ResetPassword)
 		api.GET("/auth/me", middleware.Auth(config.JWTSecret()), authH.Me)
+		api.PATCH("/auth/me", middleware.Auth(config.JWTSecret()), authH.UpdateMe)
 
 		profile := api.Group("/profile")
 		profile.Use(middleware.Auth(config.JWTSecret()))
@@ -167,6 +170,7 @@ func main() {
 			profile.PUT("/me", profileH.UpdateMe)
 			profile.GET("/me/tags", profileH.GetMyTags)
 			profile.PUT("/me/tags", profileH.UpdateMyTags)
+			profile.GET("/tags/suggestions", profileH.TagSuggestions)
 			profile.GET("/me/views", profileH.GetViewedHistory)
 		}
 
@@ -178,6 +182,8 @@ func main() {
 			users.GET("/:id/photos", photoH.ListByUser)
 			users.POST("/:id/like", likesH.Like)
 			users.POST("/:id/report", reportsH.ReportUser)
+			users.POST("/:id/block", blocksH.BlockUser)
+			users.DELETE("/:id/block", blocksH.UnblockUser)
 			users.DELETE("/:id/like", likesH.Unlike)
 			users.POST("/:id/messages", chatH.SendMessage)
 			users.GET("/:id/messages", chatH.GetMessages)
