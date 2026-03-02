@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
-import { presence, users } from '../api/client'
+import { presence, users, photos } from '../api/client'
 
 export default function UserProfile() {
   const { id } = useParams()
@@ -16,18 +16,24 @@ export default function UserProfile() {
   const [liking, setLiking] = useState(false)
   const [blocking, setBlocking] = useState(false)
   const [blocked, setBlocked] = useState(false)
+  const [hasPrimaryPhoto, setHasPrimaryPhoto] = useState(false)
 
   useEffect(() => {
     let active = true
     ;(async () => {
       try {
-        const [u, p] = await Promise.all([users.getById(id), presence.get(id)])
+        const [u, p, myPhotos] = await Promise.all([
+          users.getById(id),
+          presence.get(id),
+          photos.listMe().catch(() => []),
+        ])
         if (!active) return
         setUser(u)
         setIsMatch(Boolean(u.is_match))
         setLikedMe(Boolean(u.liked_me))
         setILiked(Boolean(u.i_liked))
         setPresenceState(p)
+        setHasPrimaryPhoto(Array.isArray(myPhotos) && myPhotos.some((ph) => ph.is_primary))
       } catch {
         if (active) setError('User not found')
       } finally {
@@ -68,7 +74,7 @@ export default function UserProfile() {
   }
 
   const onLike = async () => {
-    if (blocked) return
+    if (blocked || !hasPrimaryPhoto) return
     setLiking(true)
     setInfo('')
     setError('')
@@ -84,6 +90,23 @@ export default function UserProfile() {
       }
     } catch (err) {
       setError(err.message || 'Failed to like user')
+    } finally {
+      setLiking(false)
+    }
+  }
+
+  const onUnlike = async () => {
+    if (blocked) return
+    setLiking(true)
+    setInfo('')
+    setError('')
+    try {
+      await users.unlike(id)
+      setILiked(false)
+      setIsMatch(false)
+      setInfo('Like removed')
+    } catch (err) {
+      setError(err.message || 'Failed to unlike user')
     } finally {
       setLiking(false)
     }
@@ -136,12 +159,14 @@ export default function UserProfile() {
         </h1>
         <p className="text-slate-500">@{user.username}</p>
         {presenceState && (
-          <p className="text-xs text-slate-500 mt-1">
-            {presenceState.is_online
-              ? 'Online now'
-              : `Last seen: ${
-                  presenceState.last_seen ? new Date(presenceState.last_seen).toLocaleString() : 'unknown'
-                }`}
+          <p className="text-sm mt-1">
+            {presenceState.is_online ? (
+              <span className="text-emerald-600 font-medium">● Online now</span>
+            ) : (
+              <span className="text-slate-500">
+                Last connection: {presenceState.last_seen ? new Date(presenceState.last_seen).toLocaleString() : 'unknown'}
+              </span>
+            )}
           </p>
         )}
         <div className="mt-4 flex gap-2 text-sm">
@@ -167,22 +192,47 @@ export default function UserProfile() {
         {user.bio && (
           <p className="mt-4 text-slate-600">{user.bio}</p>
         )}
-        {user.fame_rating > 0 && (
-          <div className="mt-4 text-rose-500">★ Fame: {user.fame_rating}</div>
+        <div className="mt-4 text-rose-500">★ Fame rating: {user.fame_rating ?? 0}</div>
+        {user.city && (
+          <p className="mt-2 text-slate-600">City: {user.city}</p>
         )}
         {user.latitude != null && user.longitude != null && (
-          <p className="mt-4 text-xs text-slate-500">
+          <p className="mt-2 text-xs text-slate-500">
             Location: {user.latitude.toFixed(2)}, {user.longitude.toFixed(2)}
           </p>
         )}
-        <div className="mt-6 flex gap-3">
-          <button
-            onClick={onLike}
-            disabled={liking || blocked}
-            className="px-4 py-2 bg-rose-500 text-white rounded hover:bg-rose-600 disabled:opacity-60"
-          >
-            {liking ? 'Liking...' : 'Like'}
-          </button>
+        {Array.isArray(user.tags) && user.tags.length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {user.tags.map((tag) => (
+              <span key={tag} className="text-xs px-2 py-1 bg-slate-100 rounded text-slate-600">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        )}
+        {!hasPrimaryPhoto && (
+          <p className="mt-4 text-amber-600 text-sm">
+            Add a profile picture to like other users.
+          </p>
+        )}
+        <div className="mt-6 flex gap-3 flex-wrap">
+          {iLiked ? (
+            <button
+              onClick={onUnlike}
+              disabled={liking || blocked}
+              className="px-4 py-2 border border-slate-300 text-slate-700 rounded hover:bg-slate-50 disabled:opacity-60"
+            >
+              {liking ? 'Unlike...' : 'Unlike'}
+            </button>
+          ) : (
+            <button
+              onClick={onLike}
+              disabled={liking || blocked || !hasPrimaryPhoto}
+              className="px-4 py-2 bg-rose-500 text-white rounded hover:bg-rose-600 disabled:opacity-60"
+            >
+              {liking ? 'Liking...' : 'Like'}
+            </button>
+          )}
           {isMatch && !blocked && (
             <Link
               to={`/chat/${id}`}

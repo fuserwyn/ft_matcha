@@ -1,6 +1,19 @@
 COMPOSE=docker compose
 
-.PHONY: up down rebuild run logs api-logs ps e2e test
+.PHONY: up down rebuild run logs api-logs ps e2e test dev dev-api dev-infra
+
+# Development: hot reload without rebuilding Docker
+dev-infra:
+	$(COMPOSE) up -d postgres redis elasticsearch minio mailhog
+
+dev-api: dev-infra
+	@echo "Starting API with hot reload (air). Install: go install github.com/air-verse/air@latest"
+	cd api && air
+
+dev: dev-infra
+	@echo "Infra up. Run in separate terminals:"
+	@echo "  cd api && air          # API with hot reload"
+	@echo "  cd frontend && npm run dev   # Frontend with HMR"
 
 up:
 	$(COMPOSE) up -d

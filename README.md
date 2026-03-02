@@ -128,6 +128,16 @@ React is a **JavaScript library** for building user interfaces. When we say "wri
 6. MailHog UI is available at http://localhost:8025.
 7. MinIO console is available at http://localhost:9001.
 
+## Development (hot reload)
+
+To avoid rebuilding Docker on every code change:
+
+1. Start infra only: `make dev-infra`
+2. In one terminal: `make dev-api` (or `cd api && air`) — API restarts on .go changes
+3. In another: `cd frontend && npm run dev` — Vite HMR for frontend
+
+Install air: `go install github.com/air-verse/air@latest`
+
 ## Useful Commands
 
 - `make up` - start all services.
@@ -144,6 +154,11 @@ React is a **JavaScript library** for building user interfaces. When we say "wri
 - Read/unread messages and presence (`online` / `last_seen`).
 - Photos upload/list/delete/set-primary via MinIO.
 - Email notifications (like/match/message) via MailHog SMTP in development.
+
+## Compatibility
+
+- **Browsers**: Latest Chrome and Firefox (browserslist in `frontend/package.json`)
+- **Mobile**: Responsive layout with hamburger menu on small screens; viewport meta for proper scaling
 
 ## Security
 

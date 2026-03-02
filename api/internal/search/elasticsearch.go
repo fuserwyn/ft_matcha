@@ -321,6 +321,35 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 				},
 			}
 		}
+	case "tags":
+		// Sort by number of matching tags: profiles with more common tags first
+		if len(f.Tags) > 0 {
+			tagFunctions := make([]map[string]interface{}, 0, len(f.Tags))
+			for _, tag := range f.Tags {
+				tagFunctions = append(tagFunctions, map[string]interface{}{
+					"filter": map[string]interface{}{
+						"term": map[string]interface{}{"tags": tag},
+					},
+					"weight": 10.0,
+				})
+			}
+			queryBody = map[string]interface{}{
+				"function_score": map[string]interface{}{
+					"query":      queryBody,
+					"functions":  tagFunctions,
+					"score_mode": "sum",
+					"boost_mode": "sum",
+				},
+			}
+			order := "desc"
+			if sortOrder == "asc" {
+				order = "asc"
+			}
+			sort = []map[string]interface{}{
+				{"_score": map[string]interface{}{"order": order}},
+				{"fame_rating": map[string]interface{}{"order": "desc"}},
+			}
+		}
 	}
 
 	query := map[string]interface{}{

@@ -207,8 +207,9 @@ export default function Discovery() {
             >
               <option value="">Relevance</option>
               <option value="age">Age</option>
-              <option value="fame">Fame</option>
               <option value="location">Location</option>
+              <option value="fame">Fame</option>
+              <option value="tags">Tags</option>
             </select>
           </div>
           <div>
