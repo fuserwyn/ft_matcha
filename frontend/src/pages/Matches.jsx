@@ -48,11 +48,24 @@ export default function Matches() {
               key={u.id}
               className="bg-white rounded-lg border border-slate-200 p-4 flex items-center justify-between gap-3"
             >
-              <div>
+              <div className="flex items-center gap-3">
+                {u.primary_photo_url ? (
+                  <img
+                    src={u.primary_photo_url}
+                    alt={`${u.first_name} ${u.last_name}`}
+                    className="w-14 h-14 object-cover rounded-full shrink-0"
+                  />
+                ) : (
+                  <div className="w-14 h-14 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-slate-500 text-lg font-medium">
+                    {(u.first_name?.[0] || u.username?.[0] || '?').toUpperCase()}
+                  </div>
+                )}
+                <div>
                 <p className="font-semibold text-slate-800">
                   {u.first_name} {u.last_name}
                 </p>
                 <p className="text-sm text-slate-500">@{u.username}</p>
+                </div>
               </div>
               <div className="flex gap-2">
                 <Link
