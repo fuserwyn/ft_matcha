@@ -134,14 +134,14 @@ export default function UserProfile() {
   }
 
   return (
-    <div className="max-w-lg">
+    <div className="max-w-lg w-full min-w-0">
       <button
         onClick={() => navigate(-1)}
         className="text-slate-600 hover:text-rose-600 mb-4 text-sm"
       >
         ← Back
       </button>
-      <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
+      <div className="bg-white rounded-2xl shadow-lg p-4 sm:p-8 border border-slate-100">
         {user.photos?.length > 0 && (
           <div className="grid grid-cols-2 gap-3 mb-5">
             {user.photos.map((p) => (

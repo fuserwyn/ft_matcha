@@ -36,7 +36,7 @@ export default function Register() {
   }
 
   return (
-    <div className="max-w-md mx-auto">
+    <div className="max-w-md mx-auto w-full px-2 sm:px-0">
       <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
         <h1 className="text-2xl font-bold text-slate-800 mb-6">Create account</h1>
         <form onSubmit={handleSubmit} className="space-y-4">

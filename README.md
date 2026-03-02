@@ -159,6 +159,7 @@ Install air: `go install github.com/air-verse/air@latest`
 
 - **Browsers**: Latest Chrome and Firefox (browserslist in `frontend/package.json`)
 - **Mobile**: Responsive layout with hamburger menu on small screens; viewport meta for proper scaling
+- **Small screens**: min-width 280px, overflow-x hidden, safe-area padding for notched devices; images scale with `max-width: 100%`
 
 ## Security
 

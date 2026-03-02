@@ -84,7 +84,7 @@ export default function Discovery() {
 
       <div className="mb-6 p-4 bg-white rounded-lg border border-slate-200">
         <p className="text-sm font-medium text-slate-700 mb-3">Filters</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <div>
             <label className="block text-xs text-slate-500 mb-1">Gender</label>
             <select

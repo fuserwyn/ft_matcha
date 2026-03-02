@@ -57,8 +57,8 @@ export function Layout({ children }) {
 
   return (
     <div className="min-h-screen">
-      <nav className="bg-white border-b border-slate-200 shadow-sm">
-        <div className="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+      <nav className="bg-white border-b border-slate-200 shadow-sm pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between min-w-0">
           <Link to="/" className="text-xl font-semibold text-rose-600">
             Matcha
           </Link>
@@ -81,7 +81,7 @@ export function Layout({ children }) {
           </div>
         </div>
       </nav>
-      <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
+      <main className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8 min-w-0">{children}</main>
     </div>
   )
 }
