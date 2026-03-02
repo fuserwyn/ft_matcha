@@ -77,6 +77,7 @@ func main() {
 		config.MinIOAccessKey(),
 		config.MinIOSecretKey(),
 		config.MinIOBucket(),
+		config.MinIOPublicURL(),
 	)
 	if err != nil {
 		log.Fatalf("minio: %v", err)

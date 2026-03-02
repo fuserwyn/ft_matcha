@@ -39,3 +39,6 @@ frontend/node_modules/
 tmp/
 temp/
 *.tmp
+
+
+CHANGELOG.md

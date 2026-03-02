@@ -13,13 +13,14 @@ import (
 )
 
 type MinIO struct {
-	client   *minio.Client
-	endpoint string
-	bucket   string
-	useSSL   bool
+	client        *minio.Client
+	endpoint      string
+	bucket        string
+	useSSL        bool
+	publicBaseURL string // used for building URLs returned to clients
 }
 
-func NewMinIO(endpoint, accessKey, secretKey, bucket string) (*MinIO, error) {
+func NewMinIO(endpoint, accessKey, secretKey, bucket, publicURL string) (*MinIO, error) {
 	useSSL := strings.HasPrefix(endpoint, "https://")
 	cleanEndpoint := strings.TrimPrefix(strings.TrimPrefix(endpoint, "http://"), "https://")
 
@@ -32,10 +33,11 @@ func NewMinIO(endpoint, accessKey, secretKey, bucket string) (*MinIO, error) {
 	}
 
 	return &MinIO{
-		client:   client,
-		endpoint: cleanEndpoint,
-		bucket:   bucket,
-		useSSL:   useSSL,
+		client:        client,
+		endpoint:      cleanEndpoint,
+		bucket:        bucket,
+		useSSL:        useSSL,
+		publicBaseURL: strings.TrimRight(publicURL, "/"),
 	}, nil
 }
 
@@ -44,10 +46,14 @@ func (m *MinIO) EnsureBucket(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if exists {
-		return nil
+	if !exists {
+		if err := m.client.MakeBucket(ctx, m.bucket, minio.MakeBucketOptions{}); err != nil {
+			return err
+		}
 	}
-	return m.client.MakeBucket(ctx, m.bucket, minio.MakeBucketOptions{})
+	// Allow anonymous downloads so browsers can load photos directly.
+	policy := `{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::` + m.bucket + `/*"]}]}`
+	return m.client.SetBucketPolicy(ctx, m.bucket, policy)
 }
 
 func (m *MinIO) PutObject(ctx context.Context, objectKey string, r io.Reader, size int64, contentType string) (string, error) {
@@ -65,6 +71,9 @@ func (m *MinIO) RemoveObject(ctx context.Context, objectKey string) error {
 }
 
 func (m *MinIO) ObjectURL(objectKey string) string {
+	if m.publicBaseURL != "" {
+		return m.publicBaseURL + "/" + m.bucket + "/" + objectKey
+	}
 	scheme := "http"
 	if m.useSSL {
 		scheme = "https"

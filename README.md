@@ -19,23 +19,23 @@ A dating web application that facilitates connections between users—from regis
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────────────────────────────────────┐
 │                              Docker Compose                                              │
-├─────────────────────────────────────────────────────────────────────────────────────────┤
+├──────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                          │
-│  ┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐                        │
-│  │   Frontend      │   │   API (Go)       │   │   Worker (Go)    │                        │
-│  │   React         │   │   :8080          │   │   background     │                        │
+│  ┌─────────────────┐   ┌──────────────────┐   ┌─────────────────┐                        │
+│  │   Frontend      │   │   API (Go)       │   │   Worker (Go)   │                        │
+│  │   React         │   │   :8080          │   │   background    │                        │
 │  │   :3000         │──►│                  │   │                 │                        │
-│  │                 │   │  • Auth          │   │  • Sync → ES     │                        │
-│  │  Vite + React   │   │  • Profile       │   │  • Sync → Neo4j  │                        │
+│  │                 │   │  • Auth          │   │  • Sync → ES    │                        │
+│  │  Vite + React   │   │  • Profile       │   │  • Sync → Neo4j │                        │
 │  │  Tailwind       │   │  • Search        │   │  • Email        │                        │
-│  │  React Router   │   │  • Neo4j client  │   │  • Fame rating   │                        │
+│  │  React Router   │   │  • Neo4j client  │   │  • Fame rating  │                        │
 │  │  WebSocket      │   │  • WebSocket     │   │                 │                        │
-│  └─────────────────┘   └────────┬────────┘   └────────┬────────┘                        │
-│                                  │                     │                                 │
-│                    ┌─────────────┼─────────────────────┼─────────────────────────────┐  │
-│                    ▼             ▼                     ▼             ▼                 ▼  │
+│  └─────────────────┘   └────────┬─────────┘   └────────┬────────┘                        │
+│                                 │                      │                                 │
+│                   ┌─────────────┼──────────────────────┼─────────────────────────────┐  │
+│                   ▼             ▼                      ▼           ▼         ▼       │
 │             ┌──────────┐  ┌────────┐  ┌────────┐  ┌─────────┐  ┌───────┐  ┌──────┐     │
 │             │PostgreSQL│  │ Neo4j  │  │ Redis  │  │Elastic   │  │MailHog│  │MinIO │     │
 │             │  :5432   │  │ :7687  │  │ :6379  │  │ :9200    │  │ :1025 │  │:9000 │     │
@@ -64,8 +64,8 @@ A dating web application that facilitates connections between users—from regis
 
 | Data | PostgreSQL | Neo4j | Elasticsearch |
 |------|------------|-------|---------------|
-| Users, profiles | ✓ | id (sync) | indexed |
-| Likes | — | ✓ | — |
+| Users, profiles   | ✓ | id (sync) | indexed |
+| Likes | - | ✓ | — |
 | Views | — | ✓ | — |
 | Blocks | — | ✓ | — |
 | Tags | ✓ | HAS_TAG | ✓ |

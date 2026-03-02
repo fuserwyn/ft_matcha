@@ -61,6 +61,13 @@ func MinIOBucket() string {
 	return "matcha-photos"
 }
 
+// MinIOPublicURL is the base URL used to build photo URLs returned to clients.
+// It should be reachable from the browser (e.g. http://localhost:9000).
+// Defaults to empty, which falls back to MinIOEndpoint.
+func MinIOPublicURL() string {
+	return os.Getenv("MINIO_PUBLIC_URL")
+}
+
 func SMTPHost() string {
 	if v := os.Getenv("SMTP_HOST"); v != "" {
 		return v
