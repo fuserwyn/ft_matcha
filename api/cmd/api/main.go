@@ -65,6 +65,7 @@ func main() {
 	presenceRepo := repository.NewPresenceRepository(pool)
 	photoRepo := repository.NewPhotoRepository(pool)
 	authSvc := services.NewAuthService(userRepo)
+	seedSvc := services.NewSeedService(userRepo, profileRepo, photoRepo)
 	mailer := services.NewMailer(
 		config.SMTPHost(),
 		config.SMTPPort(),
@@ -77,7 +78,7 @@ func main() {
 		config.MinIOAccessKey(),
 		config.MinIOSecretKey(),
 		config.MinIOBucket(),
-		config.MinIOPublicURL(),
+		config.MinIOPublicBaseURL(),
 	)
 	if err != nil {
 		log.Fatalf("minio: %v", err)
@@ -96,6 +97,17 @@ func main() {
 		log.Fatalf("elasticsearch index: %v", err)
 	}
 	syncSvc := services.NewSyncService(userRepo, profileRepo, searchClient)
+	if config.SeedUsersEnabled() {
+		created, total, err := seedSvc.EnsureMinimumUsers(ctx, config.MinUsersCount())
+		if err != nil {
+			log.Fatalf("seed users: %v", err)
+		}
+		if created > 0 {
+			log.Printf("Seeded users: +%d (total %d)", created, total)
+		} else {
+			log.Printf("Seed users skipped: already %d users", total)
+		}
+	}
 	if err := syncSvc.ReindexAll(ctx); err != nil {
 		log.Printf("elasticsearch reindex: %v (continuing)", err)
 	}
@@ -103,10 +115,17 @@ func main() {
 
 	discoveryRepo := repository.NewDiscoveryRepository(searchClient)
 
-	authH := handlers.NewAuthHandler(authSvc, syncSvc, config.JWTSecret())
+	authH := handlers.NewAuthHandler(
+		authSvc,
+		syncSvc,
+		mailer,
+		config.JWTSecret(),
+		config.PublicAPIBaseURL(),
+		config.FrontendBaseURL(),
+	)
 	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, syncSvc)
-	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, discoveryRepo)
-	likesH := handlers.NewLikesHandler(likeRepo, userRepo, notificationRepo, mailer)
+	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, discoveryRepo, syncSvc)
+	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, notificationRepo, mailer, syncSvc)
 	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, notificationRepo, mailer)
 	photoH := handlers.NewPhotoHandler(photoRepo, minioStore)
 	notificationsH := handlers.NewNotificationsHandler(notificationRepo)
@@ -134,6 +153,9 @@ func main() {
 	{
 		api.POST("/auth/register", authH.Register)
 		api.POST("/auth/login", authH.Login)
+		api.GET("/auth/verify-email", authH.VerifyEmail)
+		api.POST("/auth/forgot-password", authH.ForgotPassword)
+		api.POST("/auth/reset-password", authH.ResetPassword)
 		api.GET("/auth/me", middleware.Auth(config.JWTSecret()), authH.Me)
 
 		profile := api.Group("/profile")
@@ -141,6 +163,9 @@ func main() {
 		{
 			profile.GET("/me", profileH.GetMe)
 			profile.PUT("/me", profileH.UpdateMe)
+			profile.GET("/me/tags", profileH.GetMyTags)
+			profile.PUT("/me/tags", profileH.UpdateMyTags)
+			profile.GET("/me/views", profileH.GetViewedHistory)
 		}
 
 		users := api.Group("/users")

@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -14,26 +15,52 @@ import (
 )
 
 type AuthHandler struct {
-	authSvc *services.AuthService
-	syncSvc *services.SyncService
-	secret  string
+	authSvc         *services.AuthService
+	syncSvc         *services.SyncService
+	mailer          *services.Mailer
+	secret          string
+	publicAPIBase   string
+	frontendBaseURL string
 }
 
-func NewAuthHandler(authSvc *services.AuthService, syncSvc *services.SyncService, jwtSecret string) *AuthHandler {
-	return &AuthHandler{authSvc: authSvc, syncSvc: syncSvc, secret: jwtSecret}
+func NewAuthHandler(
+	authSvc *services.AuthService,
+	syncSvc *services.SyncService,
+	mailer *services.Mailer,
+	jwtSecret string,
+	publicAPIBase string,
+	frontendBaseURL string,
+) *AuthHandler {
+	return &AuthHandler{
+		authSvc:         authSvc,
+		syncSvc:         syncSvc,
+		mailer:          mailer,
+		secret:          jwtSecret,
+		publicAPIBase:   publicAPIBase,
+		frontendBaseURL: frontendBaseURL,
+	}
 }
 
 type RegisterReq struct {
-	Username   string `json:"username" binding:"required"`
-	Email      string `json:"email" binding:"required,email"`
-	Password   string `json:"password" binding:"required"`
-	FirstName  string `json:"first_name" binding:"required"`
-	LastName   string `json:"last_name" binding:"required"`
+	Username  string `json:"username" binding:"required"`
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required"`
+	FirstName string `json:"first_name" binding:"required"`
+	LastName  string `json:"last_name" binding:"required"`
 }
 
 type LoginReq struct {
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
+}
+
+type ForgotPasswordReq struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+type ResetPasswordReq struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required"`
 }
 
 // Register godoc
@@ -91,6 +118,16 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	if err := h.syncSvc.SyncUser(c.Request.Context(), u.ID); err != nil {
 		log.Printf("[auth] sync to ES failed for user=%s: %v", u.ID, err)
 	}
+	verifyToken, err := h.issueEmailVerificationToken(u.ID)
+	if err != nil {
+		log.Printf("[auth] failed issuing verify token for user=%s: %v", u.ID, err)
+	} else {
+		verifyLink := fmt.Sprintf("%s/api/v1/auth/verify-email?token=%s", h.publicAPIBase, verifyToken)
+		body := fmt.Sprintf("Hi %s,\n\nVerify your email by opening this link:\n%s\n", u.FirstName, verifyLink)
+		if err := h.mailer.Send(u.Email, "Matcha email verification", body); err != nil {
+			log.Printf("[auth] failed sending verify email to user=%s: %v", u.ID, err)
+		}
+	}
 	c.JSON(http.StatusCreated, gin.H{
 		"token": token,
 		"user": gin.H{
@@ -101,6 +138,100 @@ func (h *AuthHandler) Register(c *gin.Context) {
 			"last_name":  u.LastName,
 		},
 	})
+}
+
+// VerifyEmail godoc
+// @Summary	Verify email
+// @Tags		auth
+// @Produce	json
+// @Param		token	query		string	true	"Email verification token"
+// @Success	200		{object}	map[string]string
+// @Failure	400		{object}	map[string]string
+// @Failure	401		{object}	map[string]string
+// @Router		/api/v1/auth/verify-email [get]
+func (h *AuthHandler) VerifyEmail(c *gin.Context) {
+	token := c.Query("token")
+	if token == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "token is required"})
+		return
+	}
+	userID, err := h.parseEmailVerificationToken(token)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid verification token"})
+		return
+	}
+	if err := h.authSvc.VerifyEmail(c.Request.Context(), userID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "email verified"})
+}
+
+// ForgotPassword godoc
+// @Summary	Forgot password
+// @Tags		auth
+// @Accept		json
+// @Produce	json
+// @Param		body	body		ForgotPasswordReq	true	"Forgot password payload"
+// @Success	200		{object}	map[string]string
+// @Failure	400		{object}	map[string]string
+// @Router		/api/v1/auth/forgot-password [post]
+func (h *AuthHandler) ForgotPassword(c *gin.Context) {
+	var req ForgotPasswordReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := validation.ValidateEmail(req.Email); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	resetToken, u, err := h.authSvc.RequestPasswordReset(c.Request.Context(), req.Email)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if u != nil && resetToken != "" {
+		resetLink := fmt.Sprintf("%s/reset-password?token=%s", h.frontendBaseURL, resetToken)
+		body := fmt.Sprintf("Hi %s,\n\nReset your password by opening this link:\n%s\n", u.FirstName, resetLink)
+		if err := h.mailer.Send(u.Email, "Matcha password reset", body); err != nil {
+			log.Printf("[auth] failed sending password reset email to user=%s: %v", u.ID, err)
+		}
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "if this email exists, reset link was sent"})
+}
+
+// ResetPassword godoc
+// @Summary	Reset password
+// @Tags		auth
+// @Accept		json
+// @Produce	json
+// @Param		body	body		ResetPasswordReq	true	"Reset password payload"
+// @Success	200		{object}	map[string]string
+// @Failure	400		{object}	map[string]string
+// @Router		/api/v1/auth/reset-password [post]
+func (h *AuthHandler) ResetPassword(c *gin.Context) {
+	var req ResetPasswordReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := validation.ValidatePassword(req.NewPassword); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if err := h.authSvc.ResetPassword(c.Request.Context(), req.Token, req.NewPassword); err != nil {
+		if err == services.ErrInvalidResetToken {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired token"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "password reset successful"})
 }
 
 // Login godoc
@@ -187,4 +318,32 @@ func (h *AuthHandler) issueToken(userID uuid.UUID) (string, error) {
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return t.SignedString([]byte(h.secret))
+}
+
+type emailVerificationClaims struct {
+	UserID uuid.UUID `json:"user_id"`
+	jwt.RegisteredClaims
+}
+
+func (h *AuthHandler) issueEmailVerificationToken(userID uuid.UUID) (string, error) {
+	claims := &emailVerificationClaims{
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
+			Subject:   "email_verification",
+		},
+	}
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return t.SignedString([]byte(h.secret))
+}
+
+func (h *AuthHandler) parseEmailVerificationToken(token string) (uuid.UUID, error) {
+	claims := &emailVerificationClaims{}
+	parsed, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
+		return []byte(h.secret), nil
+	})
+	if err != nil || !parsed.Valid || claims.Subject != "email_verification" {
+		return uuid.Nil, fmt.Errorf("invalid token")
+	}
+	return claims.UserID, nil
 }

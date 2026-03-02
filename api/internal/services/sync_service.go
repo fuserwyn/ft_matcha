@@ -49,10 +49,16 @@ func (s *SyncService) SyncUser(ctx context.Context, userID uuid.UUID) error {
 		if p.Bio != nil {
 			doc.Bio = *p.Bio
 		}
+		if p.City != nil {
+			doc.City = *p.City
+		}
 		doc.FameRating = p.FameRating
 		if p.Latitude != nil && p.Longitude != nil {
 			doc.Location = &search.GeoPoint{Lat: *p.Latitude, Lon: *p.Longitude}
 		}
+	}
+	if tags, err := s.profileRepo.GetTags(ctx, userID); err == nil && len(tags) > 0 {
+		doc.Tags = tags
 	}
 	return s.search.Index(ctx, doc)
 }

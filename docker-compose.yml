@@ -15,6 +15,7 @@ services:
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET=${MINIO_BUCKET:-matcha-photos}
+      - MINIO_PUBLIC_BASE_URL=${MINIO_PUBLIC_BASE_URL:-http://localhost:9000}
       - SMTP_HOST=mailhog
       - SMTP_PORT=1025
       - SMTP_FROM=${SMTP_FROM:-noreply@matcha.local}

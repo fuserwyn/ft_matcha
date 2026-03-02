@@ -9,26 +9,28 @@ import (
 )
 
 type UserCard struct {
-	ID           uuid.UUID
-	Username     string
-	FirstName    string
-	LastName     string
-	Gender       *string
-	BirthDate    *time.Time
-	Bio          *string
-	FameRating   int
-	Latitude     *float64
-	Longitude    *float64
+	ID         uuid.UUID
+	Username   string
+	FirstName  string
+	LastName   string
+	Gender     *string
+	BirthDate  *time.Time
+	Bio        *string
+	City       *string
+	Tags       []string
+	FameRating int
+	Latitude   *float64
+	Longitude  *float64
 }
 
 type DiscoveryFilters struct {
-	ExcludeID   uuid.UUID
-	Gender      string
-	Interest    string
-	MinAge      int
-	MaxAge      int
-	Limit       int
-	Offset      int
+	ExcludeID uuid.UUID
+	Gender    string
+	Interest  string
+	MinAge    int
+	MaxAge    int
+	Limit     int
+	Offset    int
 }
 
 func NewDiscoveryRepository(searchClient *search.Client) *DiscoveryRepository {
@@ -57,11 +59,13 @@ func (r *DiscoveryRepository) Search(ctx context.Context, f DiscoveryFilters) ([
 	for i, d := range docs {
 		id, _ := uuid.Parse(d.UserID)
 		cards[i] = UserCard{
-			ID:        id,
-			Username:  d.Username,
-			FirstName: d.FirstName,
-			LastName:  d.LastName,
-			Bio:       strPtr(d.Bio),
+			ID:         id,
+			Username:   d.Username,
+			FirstName:  d.FirstName,
+			LastName:   d.LastName,
+			Bio:        strPtr(d.Bio),
+			City:       strPtr(d.City),
+			Tags:       d.Tags,
 			FameRating: d.FameRating,
 		}
 		if d.Gender != "" {

@@ -61,11 +61,14 @@ func MinIOBucket() string {
 	return "matcha-photos"
 }
 
-// MinIOPublicURL is the base URL used to build photo URLs returned to clients.
-// It should be reachable from the browser (e.g. http://localhost:9000).
-// Defaults to empty, which falls back to MinIOEndpoint.
-func MinIOPublicURL() string {
-	return os.Getenv("MINIO_PUBLIC_URL")
+func MinIOPublicBaseURL() string {
+	if v := os.Getenv("MINIO_PUBLIC_BASE_URL"); v != "" {
+		return v
+	}
+	if v := os.Getenv("MINIO_PUBLIC_URL"); v != "" {
+		return v
+	}
+	return "http://localhost:9000"
 }
 
 func SMTPHost() string {
@@ -96,4 +99,34 @@ func SMTPCooldownSeconds() int {
 		}
 	}
 	return 30
+}
+
+func PublicAPIBaseURL() string {
+	if v := os.Getenv("PUBLIC_API_BASE_URL"); v != "" {
+		return v
+	}
+	return "http://localhost:8080"
+}
+
+func FrontendBaseURL() string {
+	if v := os.Getenv("FRONTEND_BASE_URL"); v != "" {
+		return v
+	}
+	return "http://localhost:3000"
+}
+
+func SeedUsersEnabled() bool {
+	if v := os.Getenv("SEED_USERS_ENABLED"); v != "" {
+		return v == "1" || v == "true" || v == "TRUE"
+	}
+	return true
+}
+
+func MinUsersCount() int {
+	if v := os.Getenv("MIN_USERS_COUNT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return 500
 }

@@ -14,21 +14,27 @@ import (
 type LikesHandler struct {
 	likeRepo         *repository.LikeRepository
 	userRepo         *repository.UserRepository
+	profileRepo      *repository.ProfileRepository
 	notificationRepo *repository.NotificationRepository
 	mailer           *services.Mailer
+	syncSvc          *services.SyncService
 }
 
 func NewLikesHandler(
 	likeRepo *repository.LikeRepository,
 	userRepo *repository.UserRepository,
+	profileRepo *repository.ProfileRepository,
 	notificationRepo *repository.NotificationRepository,
 	mailer *services.Mailer,
+	syncSvc *services.SyncService,
 ) *LikesHandler {
 	return &LikesHandler{
 		likeRepo:         likeRepo,
 		userRepo:         userRepo,
+		profileRepo:      profileRepo,
 		notificationRepo: notificationRepo,
 		mailer:           mailer,
+		syncSvc:          syncSvc,
 	}
 }
 
@@ -78,6 +84,9 @@ func (h *LikesHandler) Like(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	if _, err := h.profileRepo.RecalculateFameRating(c.Request.Context(), likedID); err == nil {
+		_ = h.syncSvc.SyncUser(c.Request.Context(), likedID)
+	}
 	_, _ = h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "like", nil, "You have a new like")
 	actor, _ := h.userRepo.GetByID(c.Request.Context(), myID)
 	if actor != nil {
@@ -123,6 +132,9 @@ func (h *LikesHandler) Unlike(c *gin.Context) {
 	}
 
 	_ = h.likeRepo.Delete(c.Request.Context(), myID, likedID)
+	if _, err := h.profileRepo.RecalculateFameRating(c.Request.Context(), likedID); err == nil {
+		_ = h.syncSvc.SyncUser(c.Request.Context(), likedID)
+	}
 	c.Status(http.StatusNoContent)
 }
 

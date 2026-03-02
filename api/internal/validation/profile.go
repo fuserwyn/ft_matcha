@@ -6,8 +6,11 @@ import (
 )
 
 const (
-	MinAge = 18
-	MaxBioLen = 500
+	MinAge       = 18
+	MaxBioLen    = 500
+	MaxCityLen   = 100
+	MaxTagsCount = 20
+	MaxTagLen    = 30
 )
 
 var (
@@ -78,6 +81,28 @@ func ValidateLatitude(v float64) error {
 func ValidateLongitude(v float64) error {
 	if v < -180 || v > 180 {
 		return fmt.Errorf("longitude: must be between -180 and 180")
+	}
+	return nil
+}
+
+func ValidateCity(s string) error {
+	if len(s) > MaxCityLen {
+		return fmt.Errorf("city: max %d characters", MaxCityLen)
+	}
+	return nil
+}
+
+func ValidateTags(tags []string) error {
+	if len(tags) > MaxTagsCount {
+		return fmt.Errorf("tags: max %d", MaxTagsCount)
+	}
+	for _, tag := range tags {
+		if tag == "" {
+			return fmt.Errorf("tags: empty tag is not allowed")
+		}
+		if len(tag) > MaxTagLen {
+			return fmt.Errorf("tags: each tag max %d characters", MaxTagLen)
+		}
 	}
 	return nil
 }
