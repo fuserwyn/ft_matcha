@@ -31,6 +31,12 @@ type ProfileRepository struct {
 	pool *pgxpool.Pool
 }
 
+func (r *ProfileRepository) Count(ctx context.Context) (int, error) {
+	var total int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM profiles`).Scan(&total)
+	return total, err
+}
+
 func (r *ProfileRepository) CountByGender(ctx context.Context) (male int, female int, err error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT gender, COUNT(*)::int

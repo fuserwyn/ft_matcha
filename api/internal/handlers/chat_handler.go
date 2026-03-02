@@ -3,6 +3,7 @@ package handlers
 import (
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -287,6 +288,18 @@ func (h *ChatHandler) MarkRead(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+	if affected > 0 && h.hub != nil {
+		event := gin.H{
+			"type": "message_read",
+			"data": gin.H{
+				"sender_id": otherID,
+				"reader_id": myID,
+				"read_at":   time.Now().UTC(),
+			},
+		}
+		h.hub.SendToUser(otherID, event)
+		h.hub.SendToUser(myID, event)
 	}
 	c.JSON(http.StatusOK, gin.H{"updated": affected})
 }

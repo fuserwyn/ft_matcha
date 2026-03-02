@@ -13,16 +13,35 @@ export default function Discovery() {
     interest: '',
     min_age: '',
     max_age: '',
+    min_fame: '',
+    max_fame: '',
+    city: '',
+    tags: '',
+    max_distance_km: '',
+    sort_by: '',
+    sort_order: '',
   })
 
   const load = async () => {
     setLoading(true)
     try {
       const params = {}
-      if (filters.gender) params.gender = filters.gender
-      if (filters.interest) params.interest = filters.interest
+      if (filters.interest && filters.interest !== 'both') {
+        // "Interested in" should filter target profile gender.
+        params.gender = filters.interest
+      } else if (filters.gender) {
+        params.gender = filters.gender
+      }
       if (filters.min_age) params.min_age = filters.min_age
       if (filters.max_age) params.max_age = filters.max_age
+      if (filters.min_fame) params.min_fame = filters.min_fame
+      if (filters.max_fame) params.max_fame = filters.max_fame
+      if (filters.city) params.city = filters.city
+      if (filters.tags) params.tags = filters.tags
+      if (filters.max_distance_km) params.max_distance_km = filters.max_distance_km
+      if (filters.sort_by) params.sort_by = filters.sort_by
+      if (filters.sort_order) params.sort_order = filters.sort_order
+      params.limit = 500
       const data = await users.search(params)
       setList(data)
     } catch (err) {
@@ -34,7 +53,19 @@ export default function Discovery() {
 
   useEffect(() => {
     load()
-  }, [filters.gender, filters.interest, filters.min_age, filters.max_age])
+  }, [
+    filters.gender,
+    filters.interest,
+    filters.min_age,
+    filters.max_age,
+    filters.min_fame,
+    filters.max_fame,
+    filters.city,
+    filters.tags,
+    filters.max_distance_km,
+    filters.sort_by,
+    filters.sort_order,
+  ])
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target
@@ -69,7 +100,7 @@ export default function Discovery() {
             </select>
           </div>
           <div>
-            <label className="block text-xs text-slate-500 mb-1">Interested in</label>
+            <label className="block text-xs text-slate-500 mb-1">Looking for</label>
             <select
               name="interest"
               value={filters.interest}
@@ -107,6 +138,91 @@ export default function Discovery() {
               placeholder="99"
               className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
             />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Min fame</label>
+            <input
+              type="number"
+              name="min_fame"
+              value={filters.min_fame}
+              onChange={handleFilterChange}
+              min="0"
+              placeholder="0"
+              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Max fame</label>
+            <input
+              type="number"
+              name="max_fame"
+              value={filters.max_fame}
+              onChange={handleFilterChange}
+              min="0"
+              placeholder="100"
+              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">City</label>
+            <input
+              type="text"
+              name="city"
+              value={filters.city}
+              onChange={handleFilterChange}
+              placeholder="Paris"
+              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Tags (comma)</label>
+            <input
+              type="text"
+              name="tags"
+              value={filters.tags}
+              onChange={handleFilterChange}
+              placeholder="music,travel"
+              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Max distance (km)</label>
+            <input
+              type="number"
+              name="max_distance_km"
+              value={filters.max_distance_km}
+              onChange={handleFilterChange}
+              min="1"
+              placeholder="50"
+              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Sort by</label>
+            <select
+              name="sort_by"
+              value={filters.sort_by}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
+            >
+              <option value="">Relevance</option>
+              <option value="age">Age</option>
+              <option value="fame">Fame</option>
+              <option value="location">Location</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Sort order</label>
+            <select
+              name="sort_order"
+              value={filters.sort_order}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
+            >
+              <option value="">Default</option>
+              <option value="asc">ASC</option>
+              <option value="desc">DESC</option>
+            </select>
           </div>
         </div>
       </div>
@@ -149,6 +265,16 @@ export default function Discovery() {
               )}
               {u.fame_rating > 0 && (
                 <div className="mt-2 text-xs text-rose-500">★ {u.fame_rating}</div>
+              )}
+              {u.city && <div className="mt-1 text-xs text-slate-500">City: {u.city}</div>}
+              {Array.isArray(u.tags) && u.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {u.tags.slice(0, 4).map((tag) => (
+                    <span key={tag} className="text-[11px] px-2 py-0.5 bg-slate-100 rounded text-slate-600">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
               )}
             </Link>
           ))}

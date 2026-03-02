@@ -181,7 +181,12 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 	}
 	if f.City != "" {
 		must = append(must, map[string]interface{}{
-			"term": map[string]interface{}{"city": f.City},
+			"term": map[string]interface{}{
+				"city": map[string]interface{}{
+					"value":             f.City,
+					"case_insensitive":  true,
+				},
+			},
 		})
 	}
 	if len(f.Tags) > 0 && f.StrictTags {

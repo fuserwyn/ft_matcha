@@ -29,28 +29,32 @@ func NewSeedService(
 
 func (s *SeedService) EnsureMinimumUsers(ctx context.Context, minimum int) (int, int, error) {
 	if minimum <= 0 {
-		total, err := s.userRepo.Count(ctx)
+		total, err := s.profileRepo.Count(ctx)
 		return 0, total, err
 	}
 
-	total, err := s.userRepo.Count(ctx)
+	totalProfiles, err := s.profileRepo.Count(ctx)
 	if err != nil {
 		return 0, 0, err
 	}
-	if total >= minimum {
-		return 0, total, nil
+	if totalProfiles >= minimum {
+		return 0, totalProfiles, nil
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte("SeedPassw0rd!"), bcrypt.DefaultCost)
 	if err != nil {
-		return 0, total, err
+		return 0, totalProfiles, err
 	}
 
 	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
 	created := 0
+	totalUsers, err := s.userRepo.Count(ctx)
+	if err != nil {
+		return 0, totalProfiles, err
+	}
 	maleCount, femaleCount, err := s.profileRepo.CountByGender(ctx)
 	if err != nil {
-		return 0, total, err
+		return 0, totalProfiles, err
 	}
 
 	const targetPerGender = 250
@@ -58,27 +62,27 @@ func (s *SeedService) EnsureMinimumUsers(ctx context.Context, minimum int) (int,
 	femaleDeficit := maxInt(0, targetPerGender-femaleCount)
 
 	for i := 0; i < maleDeficit; i++ {
-		if err := s.createSeedUser(ctx, hash, rng, total+created+1, "male"); err != nil {
-			return created, total + created, err
+		if err := s.createSeedUser(ctx, hash, rng, totalUsers+created+1, "male"); err != nil {
+			return created, totalProfiles + created, err
 		}
 		created++
 		maleCount++
 	}
 	for i := 0; i < femaleDeficit; i++ {
-		if err := s.createSeedUser(ctx, hash, rng, total+created+1, "female"); err != nil {
-			return created, total + created, err
+		if err := s.createSeedUser(ctx, hash, rng, totalUsers+created+1, "female"); err != nil {
+			return created, totalProfiles + created, err
 		}
 		created++
 		femaleCount++
 	}
 
-	for total+created < minimum {
+	for totalProfiles+created < minimum {
 		gender := "male"
 		if femaleCount < maleCount {
 			gender = "female"
 		}
-		if err := s.createSeedUser(ctx, hash, rng, total+created+1, gender); err != nil {
-			return created, total + created, err
+		if err := s.createSeedUser(ctx, hash, rng, totalUsers+created+1, gender); err != nil {
+			return created, totalProfiles + created, err
 		}
 		created++
 		if gender == "male" {
@@ -88,7 +92,7 @@ func (s *SeedService) EnsureMinimumUsers(ctx context.Context, minimum int) (int,
 		}
 	}
 
-	return created, total + created, nil
+	return created, totalProfiles + created, nil
 }
 
 func (s *SeedService) createSeedUser(ctx context.Context, hash []byte, rng *rand.Rand, n int, gender string) error {

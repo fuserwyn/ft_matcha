@@ -1,8 +1,10 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useNotifications } from '../context/NotificationsContext'
 
 export function Layout({ children }) {
   const { user, logout } = useAuth()
+  const { unreadCount } = useNotifications()
   const navigate = useNavigate()
 
   const handleLogout = () => {
@@ -26,8 +28,13 @@ export function Layout({ children }) {
                 <Link to="/matches" className="text-slate-600 hover:text-rose-600 transition">
                   Matches
                 </Link>
-                <Link to="/notifications" className="text-slate-600 hover:text-rose-600 transition">
+                <Link to="/notifications" className="text-slate-600 hover:text-rose-600 transition relative">
                   Notifications
+                  {unreadCount > 0 && (
+                    <span className="ml-2 inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-rose-500 text-white text-xs font-semibold">
+                      {unreadCount > 99 ? '99+' : unreadCount}
+                    </span>
+                  )}
                 </Link>
                 <Link to="/profile" className="text-slate-600 hover:text-rose-600 transition">
                   Profile

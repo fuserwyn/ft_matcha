@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { chat, presence, users, wsChatUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -22,8 +22,6 @@ export default function Chat() {
 
   const wsRef = useRef(null)
   const listEndRef = useRef(null)
-
-  const wsUrl = useMemo(() => wsChatUrl(), [])
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -58,44 +56,95 @@ export default function Chat() {
   }, [otherUserId])
 
   useEffect(() => {
+    const wsUrl = wsChatUrl()
     if (!wsUrl) return undefined
 
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
+    let active = true
+    let ws = null
+    let reconnectTimer = null
 
-    ws.onopen = () => setConnected(true)
-    ws.onclose = () => setConnected(false)
-    ws.onerror = () => setConnected(false)
-    ws.onmessage = async (event) => {
-      try {
-        const payload = JSON.parse(event.data)
-        if (payload.type === 'message' && payload.data) {
-          const m = payload.data
-          const isCurrentConversation =
-            (m.sender_id === otherUserId && m.receiver_id === user?.id) ||
-            (m.sender_id === user?.id && m.receiver_id === otherUserId)
+    const connect = () => {
+      ws = new WebSocket(wsUrl)
+      wsRef.current = ws
 
-          if (isCurrentConversation) {
-            setMessages((prev) => {
-              if (prev.some((x) => x.id === m.id)) return prev
-              return [...prev, m]
-            })
-            if (m.sender_id === otherUserId) {
-              await chat.markRead(otherUserId)
-            }
-          }
-        } else if (payload.type === 'error') {
-          setError(payload.error || 'WebSocket error')
+      ws.onopen = () => setConnected(true)
+      ws.onclose = () => {
+        setConnected(false)
+        if (active) {
+          reconnectTimer = setTimeout(connect, 2000)
         }
-      } catch {
-        // ignore malformed events
+      }
+      ws.onerror = () => setConnected(false)
+      ws.onmessage = async (event) => {
+        try {
+          const payload = JSON.parse(event.data)
+          if (payload.type === 'message' && payload.data) {
+            const m = payload.data
+            const isCurrentConversation =
+              (m.sender_id === otherUserId && m.receiver_id === user?.id) ||
+              (m.sender_id === user?.id && m.receiver_id === otherUserId)
+
+            if (isCurrentConversation) {
+              setMessages((prev) => {
+                if (prev.some((x) => x.id === m.id)) return prev
+                return [...prev, m]
+              })
+              if (m.sender_id === otherUserId) {
+                await chat.markRead(otherUserId)
+              }
+            }
+          } else if (payload.type === 'message_read' && payload.data) {
+            const r = payload.data
+            const readByOther = r.reader_id === otherUserId && r.sender_id === user?.id
+            if (readByOther) {
+              setMessages((prev) =>
+                prev.map((m) => {
+                  const shouldMark = m.sender_id === user?.id && m.receiver_id === otherUserId
+                  return shouldMark ? { ...m, is_read: true, read_at: r.read_at || m.read_at } : m
+                }),
+              )
+            }
+          } else if (payload.type === 'error') {
+            setError(payload.error || 'WebSocket error')
+          }
+        } catch {
+          // ignore malformed events
+        }
       }
     }
 
+    connect()
     return () => {
-      ws.close()
+      active = false
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      if (ws) ws.close()
     }
-  }, [wsUrl, otherUserId, user?.id])
+  }, [otherUserId, user?.id])
+
+  useEffect(() => {
+    const id = setInterval(async () => {
+      try {
+        const p = await presence.get(otherUserId)
+        setPresenceState(p)
+      } catch {
+        // ignore poll errors
+      }
+    }, 15000)
+    return () => clearInterval(id)
+  }, [otherUserId])
+
+  useEffect(() => {
+    const id = setInterval(async () => {
+      if (connected) return
+      try {
+        const msgs = await chat.listMessages(otherUserId)
+        setMessages(msgs)
+      } catch {
+        // ignore poll errors
+      }
+    }, 5000)
+    return () => clearInterval(id)
+  }, [connected, otherUserId])
 
   const send = async (e) => {
     e.preventDefault()

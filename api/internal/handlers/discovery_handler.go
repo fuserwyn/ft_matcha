@@ -67,7 +67,7 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 	userID, _ := c.Get(middleware.UserIDKey)
 	id := userID.(uuid.UUID)
 
-	f := repository.DiscoveryFilters{ExcludeID: id, Limit: 20}
+	f := repository.DiscoveryFilters{ExcludeID: id, Limit: 500}
 	if blockedIDs, err := h.blockRepo.ListBlockedIDs(c.Request.Context(), id); err == nil {
 		f.ExcludeIDs = blockedIDs
 	}
@@ -147,7 +147,7 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 		f.SortOrder = v
 	}
 	if v := c.Query("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 50 {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 1000 {
 			f.Limit = n
 		}
 	}

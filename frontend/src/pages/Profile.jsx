@@ -1,37 +1,58 @@
 import { useState, useEffect } from 'react'
-import { photos, profile } from '../api/client'
+import { auth, photos, profile } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 
 const GENDERS = ['male', 'female', 'non-binary', 'other']
 const PREFERENCES = ['male', 'female', 'both', 'other']
 
 export default function Profile() {
+  const { updateUser } = useAuth()
+  const [account, setAccount] = useState({
+    username: '',
+    email: '',
+    first_name: '',
+    last_name: '',
+  })
   const [data, setData] = useState({
     bio: '',
     gender: '',
     sexual_preference: '',
     birth_date: '',
+    city: '',
     latitude: '',
     longitude: '',
   })
+  const [tagsInput, setTagsInput] = useState('')
+  const [tagSuggestions, setTagSuggestions] = useState([])
   const [loading, setLoading] = useState(true)
+  const [savingAccount, setSavingAccount] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [savingTags, setSavingTags] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [photoList, setPhotoList] = useState([])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
   useEffect(() => {
-    profile
-      .get()
-      .then((p) => {
+    Promise.all([auth.me(), profile.get(), profile.getTags(), profile.tagSuggestions()])
+      .then(([me, p, tagsRes, suggRes]) => {
+        setAccount({
+          username: me.username || '',
+          email: me.email || '',
+          first_name: me.first_name || '',
+          last_name: me.last_name || '',
+        })
         setData({
           bio: p.bio || '',
           gender: p.gender || '',
           sexual_preference: p.sexual_preference || '',
           birth_date: p.birth_date || '',
+          city: p.city || '',
           latitude: p.latitude ?? '',
           longitude: p.longitude ?? '',
         })
+        setTagsInput((tagsRes?.tags || []).join(', '))
+        setTagSuggestions(suggRes?.tags || [])
         setPhotoList(p.photos || [])
       })
       .catch(() => setError('Failed to load profile'))
@@ -41,6 +62,27 @@ export default function Profile() {
   const handleChange = (e) => {
     const { name, value } = e.target
     setData((d) => ({ ...d, [name]: value }))
+  }
+
+  const handleAccountChange = (e) => {
+    const { name, value } = e.target
+    setAccount((d) => ({ ...d, [name]: value }))
+  }
+
+  const handleAccountSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setMessage('')
+    setSavingAccount(true)
+    try {
+      await auth.updateMe(account)
+      updateUser({ username: account.username })
+      setMessage('Account updated')
+    } catch (err) {
+      setError(err.message || 'Account update failed')
+    } finally {
+      setSavingAccount(false)
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -65,6 +107,7 @@ export default function Profile() {
     if (data.gender) payload.gender = data.gender
     if (data.sexual_preference) payload.sexual_preference = data.sexual_preference
     if (data.birth_date) payload.birth_date = data.birth_date
+    if (data.city) payload.city = data.city
     if (data.latitude !== '') payload.latitude = parseFloat(data.latitude)
     if (data.longitude !== '') payload.longitude = parseFloat(data.longitude)
     try {
@@ -75,6 +118,46 @@ export default function Profile() {
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleSaveTags = async () => {
+    setError('')
+    setMessage('')
+    setSavingTags(true)
+    try {
+      const tags = tagsInput
+        .split(',')
+        .map((x) => x.trim())
+        .filter(Boolean)
+      await profile.updateTags(tags)
+      setMessage('Tags updated')
+    } catch (err) {
+      setError(err.message || 'Tags update failed')
+    } finally {
+      setSavingTags(false)
+    }
+  }
+
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      setError('Geolocation is not supported by your browser')
+      return
+    }
+    setError('')
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setData((d) => ({
+          ...d,
+          latitude: String(pos.coords.latitude),
+          longitude: String(pos.coords.longitude),
+        }))
+        setMessage('Coordinates updated from GPS')
+      },
+      () => {
+        setError('Unable to retrieve your location')
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    )
   }
 
   const refreshPhotos = async () => {
@@ -135,6 +218,99 @@ export default function Profile() {
   return (
     <div className="max-w-lg">
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Your profile</h1>
+      <form onSubmit={handleAccountSubmit} className="space-y-4 mb-6 p-4 bg-white rounded-lg border border-slate-200">
+        <p className="text-sm font-medium text-slate-700">Account</p>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Username</label>
+            <input
+              type="text"
+              name="username"
+              value={account.username}
+              onChange={handleAccountChange}
+              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+            <input
+              type="email"
+              name="email"
+              value={account.email}
+              onChange={handleAccountChange}
+              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">First name</label>
+            <input
+              type="text"
+              name="first_name"
+              value={account.first_name}
+              onChange={handleAccountChange}
+              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Last name</label>
+            <input
+              type="text"
+              name="last_name"
+              value={account.last_name}
+              onChange={handleAccountChange}
+              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+            />
+          </div>
+        </div>
+        <button
+          type="submit"
+          disabled={savingAccount}
+          className="py-2 px-4 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-900 disabled:opacity-50 transition"
+        >
+          {savingAccount ? 'Saving account...' : 'Save account'}
+        </button>
+      </form>
+      <div className="space-y-3 mb-6 p-4 bg-white rounded-lg border border-slate-200">
+        <p className="text-sm font-medium text-slate-700">Interests / Tags</p>
+        <input
+          type="text"
+          value={tagsInput}
+          onChange={(e) => setTagsInput(e.target.value)}
+          placeholder="music, travel, books"
+          className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+        />
+        {tagSuggestions.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {tagSuggestions.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => {
+                  const existing = tagsInput
+                    .split(',')
+                    .map((x) => x.trim().toLowerCase())
+                    .filter(Boolean)
+                  if (existing.includes(tag.toLowerCase())) return
+                  setTagsInput((prev) => (prev.trim() ? `${prev}, ${tag}` : tag))
+                }}
+                className="text-xs px-2 py-1 bg-slate-100 rounded hover:bg-slate-200 text-slate-700"
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+        )}
+        <div>
+          <button
+            type="button"
+            onClick={handleSaveTags}
+            disabled={savingTags}
+            className="py-2 px-4 bg-rose-500 text-white font-medium rounded-lg hover:bg-rose-600 disabled:opacity-50 transition"
+          >
+            {savingTags ? 'Saving tags...' : 'Save tags'}
+          </button>
+        </div>
+      </div>
       <div className="mb-6 p-4 bg-white rounded-lg border border-slate-200">
         <div className="flex items-center justify-between mb-3">
           <p className="text-sm font-medium text-slate-700">Photos ({photoList.length}/5)</p>
@@ -251,6 +427,17 @@ export default function Profile() {
           <p className="text-xs text-slate-500 mt-1">YYYY-MM-DD, 18+</p>
         </div>
         <div className="grid grid-cols-2 gap-4">
+          <div className="col-span-2">
+            <label className="block text-sm font-medium text-slate-700 mb-1">City</label>
+            <input
+              type="text"
+              name="city"
+              value={data.city}
+              onChange={handleChange}
+              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+              placeholder="Paris"
+            />
+          </div>
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">Latitude</label>
             <input
@@ -278,6 +465,15 @@ export default function Profile() {
               className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
               placeholder="-180 to 180"
             />
+          </div>
+          <div className="col-span-2">
+            <button
+              type="button"
+              onClick={handleUseMyLocation}
+              className="px-3 py-2 rounded border border-slate-300 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Use my current GPS location
+            </button>
           </div>
         </div>
         <button

@@ -105,9 +105,9 @@ func main() {
 			log.Fatalf("seed users: %v", err)
 		}
 		if created > 0 {
-			log.Printf("Seeded users: +%d (total %d)", created, total)
+			log.Printf("Seeded profiles: +%d (total %d)", created, total)
 		} else {
-			log.Printf("Seed users skipped: already %d users", total)
+			log.Printf("Seed users skipped: already %d profiles", total)
 		}
 	}
 	if err := syncSvc.ReindexAll(ctx); err != nil {

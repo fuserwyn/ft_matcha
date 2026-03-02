@@ -1,6 +1,6 @@
 COMPOSE=docker compose
 
-.PHONY: up down rebuild logs api-logs ps e2e test
+.PHONY: up down rebuild run logs api-logs ps e2e test
 
 up:
 	$(COMPOSE) up -d
@@ -10,6 +10,13 @@ down:
 
 rebuild:
 	$(COMPOSE) up -d --build
+
+run:
+	$(COMPOSE) down --remove-orphans --timeout 10
+	BUILDX_NO_DEFAULT_ATTESTATIONS=1 $(COMPOSE) build --no-cache api
+	BUILDX_NO_DEFAULT_ATTESTATIONS=1 $(COMPOSE) build --no-cache worker
+	BUILDX_NO_DEFAULT_ATTESTATIONS=1 $(COMPOSE) build --no-cache frontend
+	$(COMPOSE) up -d --force-recreate
 
 logs:
 	$(COMPOSE) logs -f --tail=200

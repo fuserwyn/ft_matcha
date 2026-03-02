@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { notifications } from '../api/client'
+import { useNotifications } from '../context/NotificationsContext'
 
 function formatDate(ts) {
   if (!ts) return '—'
@@ -7,6 +8,7 @@ function formatDate(ts) {
 }
 
 export default function Notifications() {
+  const { refreshUnread, setUnreadCount } = useNotifications()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -18,6 +20,11 @@ export default function Notifications() {
     try {
       const data = await notifications.list({ unread_only: unreadOnly })
       setItems(data)
+      if (unreadOnly) {
+        setUnreadCount(Array.isArray(data) ? data.length : 0)
+      } else {
+        await refreshUnread()
+      }
     } catch (err) {
       setError(err.message || 'Failed to load notifications')
     } finally {
@@ -32,6 +39,7 @@ export default function Notifications() {
   const markAllRead = async () => {
     try {
       await notifications.markAllRead()
+      setUnreadCount(0)
       await load(onlyUnread)
     } catch (err) {
       setError(err.message || 'Failed to mark notifications read')

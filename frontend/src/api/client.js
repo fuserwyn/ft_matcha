@@ -26,11 +26,15 @@ export const auth = {
   register: (body) => api('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body) => api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
   me: () => api('/api/v1/auth/me'),
+  updateMe: (body) => api('/api/v1/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
 }
 
 export const profile = {
   get: () => api('/api/v1/profile/me'),
   update: (body) => api('/api/v1/profile/me', { method: 'PUT', body: JSON.stringify(body) }),
+  getTags: () => api('/api/v1/profile/me/tags'),
+  updateTags: (tags) => api('/api/v1/profile/me/tags', { method: 'PUT', body: JSON.stringify({ tags }) }),
+  tagSuggestions: () => api('/api/v1/profile/tags/suggestions'),
 }
 
 export const users = {
@@ -42,6 +46,8 @@ export const users = {
   getPhotos: (id) => api(`/api/v1/users/${id}/photos`),
   like: (id) => api(`/api/v1/users/${id}/like`, { method: 'POST' }),
   unlike: (id) => api(`/api/v1/users/${id}/like`, { method: 'DELETE' }),
+  block: (id) => api(`/api/v1/users/${id}/block`, { method: 'POST' }),
+  unblock: (id) => api(`/api/v1/users/${id}/block`, { method: 'DELETE' }),
 }
 
 export const matches = {

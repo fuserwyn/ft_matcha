@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { matches } from '../api/client'
+import { matches, users } from '../api/client'
 
 export default function Matches() {
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [blockingId, setBlockingId] = useState(null)
 
   useEffect(() => {
     let active = true
@@ -66,6 +67,24 @@ export default function Matches() {
                 >
                   Chat
                 </Link>
+                <button
+                  onClick={async () => {
+                    setBlockingId(u.id)
+                    setError('')
+                    try {
+                      await users.block(u.id)
+                      setItems((prev) => prev.filter((x) => x.id !== u.id))
+                    } catch (err) {
+                      setError(err.message || 'Failed to block user')
+                    } finally {
+                      setBlockingId(null)
+                    }
+                  }}
+                  disabled={blockingId === u.id}
+                  className="px-3 py-2 rounded border border-rose-300 text-sm text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                >
+                  {blockingId === u.id ? 'Blocking...' : 'Block'}
+                </button>
               </div>
             </div>
           ))}
