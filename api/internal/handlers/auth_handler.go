@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,13 +14,17 @@ import (
 	"github.com/google/uuid"
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/services"
+	"matcha/api/internal/store"
 	"matcha/api/internal/validation"
 )
+
+const emailVerifyTTL = 24 * time.Hour
 
 type AuthHandler struct {
 	authSvc         *services.AuthService
 	syncSvc         *services.SyncService
 	mailer          *services.Mailer
+	tokenStore      *store.TokenStore
 	secret          string
 	publicAPIBase   string
 	frontendBaseURL string
@@ -27,6 +34,7 @@ func NewAuthHandler(
 	authSvc *services.AuthService,
 	syncSvc *services.SyncService,
 	mailer *services.Mailer,
+	tokenStore *store.TokenStore,
 	jwtSecret string,
 	publicAPIBase string,
 	frontendBaseURL string,
@@ -35,6 +43,7 @@ func NewAuthHandler(
 		authSvc:         authSvc,
 		syncSvc:         syncSvc,
 		mailer:          mailer,
+		tokenStore:      tokenStore,
 		secret:          jwtSecret,
 		publicAPIBase:   publicAPIBase,
 		frontendBaseURL: frontendBaseURL,
@@ -125,7 +134,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	if err := h.syncSvc.SyncUser(c.Request.Context(), u.ID); err != nil {
 		log.Printf("[auth] sync to ES failed for user=%s: %v", u.ID, err)
 	}
-	verifyToken, err := h.issueEmailVerificationToken(u.ID)
+	verifyToken, err := h.issueEmailVerificationToken(c.Request.Context(), u.ID)
 	if err != nil {
 		log.Printf("[auth] failed issuing verify token for user=%s: %v", u.ID, err)
 	} else {
@@ -162,9 +171,13 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "token is required"})
 		return
 	}
-	userID, err := h.parseEmailVerificationToken(token)
+	userID, err := h.tokenStore.GetAndDeleteEmailVerify(c.Request.Context(), token)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid verification token"})
+		if err == store.ErrTokenNotFound {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired verification token"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
 	if err := h.authSvc.VerifyEmail(c.Request.Context(), userID); err != nil {
@@ -354,30 +367,14 @@ func (h *AuthHandler) issueToken(userID uuid.UUID) (string, error) {
 	return t.SignedString([]byte(h.secret))
 }
 
-type emailVerificationClaims struct {
-	UserID uuid.UUID `json:"user_id"`
-	jwt.RegisteredClaims
-}
-
-func (h *AuthHandler) issueEmailVerificationToken(userID uuid.UUID) (string, error) {
-	claims := &emailVerificationClaims{
-		UserID: userID,
-		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
-			Subject:   "email_verification",
-		},
+func (h *AuthHandler) issueEmailVerificationToken(ctx context.Context, userID uuid.UUID) (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
 	}
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	return t.SignedString([]byte(h.secret))
-}
-
-func (h *AuthHandler) parseEmailVerificationToken(token string) (uuid.UUID, error) {
-	claims := &emailVerificationClaims{}
-	parsed, err := jwt.ParseWithClaims(token, claims, func(t *jwt.Token) (interface{}, error) {
-		return []byte(h.secret), nil
-	})
-	if err != nil || !parsed.Valid || claims.Subject != "email_verification" {
-		return uuid.Nil, fmt.Errorf("invalid token")
+	token := hex.EncodeToString(b)
+	if err := h.tokenStore.SetEmailVerify(ctx, token, userID, emailVerifyTTL); err != nil {
+		return "", err
 	}
-	return claims.UserID, nil
+	return token, nil
 }

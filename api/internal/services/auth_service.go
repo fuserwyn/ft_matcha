@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"matcha/api/internal/repository"
+	"matcha/api/internal/store"
 	"matcha/api/internal/validation"
 )
 
@@ -19,15 +20,19 @@ var ErrUserExists = errors.New("user exists")
 var ErrInvalidResetToken = errors.New("invalid reset token")
 var ErrEmailNotVerified = errors.New("email not verified")
 
-func NewAuthService(userRepo *repository.UserRepository) *AuthService {
-	return &AuthService{userRepo: userRepo}
+func NewAuthService(userRepo *repository.UserRepository, tokenStore *store.TokenStore) *AuthService {
+	return &AuthService{userRepo: userRepo, tokenStore: tokenStore}
 }
 
 type AuthService struct {
-	userRepo *repository.UserRepository
+	userRepo   *repository.UserRepository
+	tokenStore *store.TokenStore
 }
 
-const passwordResetTTL = 30 * time.Minute
+const (
+	emailVerifyTTL = 24 * time.Hour
+	passwordResetTTL = 30 * time.Minute
+)
 
 func (s *AuthService) Register(ctx context.Context, username, email, password, firstName, lastName string) (*repository.User, error) {
 	if err := validation.ValidatePassword(password); err != nil {
@@ -118,7 +123,7 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) (s
 	if err != nil {
 		return "", nil, err
 	}
-	if err := s.userRepo.StorePasswordResetToken(ctx, tokenHash, u.ID, time.Now().Add(passwordResetTTL)); err != nil {
+	if err := s.tokenStore.SetPwdReset(ctx, tokenHash, u.ID, passwordResetTTL); err != nil {
 		return "", nil, err
 	}
 	return resetToken, u, nil
@@ -130,22 +135,19 @@ func (s *AuthService) ResetPassword(ctx context.Context, resetToken, newPassword
 	}
 
 	tokenHash := hashToken(resetToken)
-	userID, err := s.userRepo.GetUserIDByValidResetToken(ctx, tokenHash)
+	userID, err := s.tokenStore.GetAndDeletePwdReset(ctx, tokenHash)
 	if err != nil {
-		return ErrInvalidResetToken
+		if err == store.ErrTokenNotFound {
+			return ErrInvalidResetToken
+		}
+		return err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
 	if err != nil {
 		return err
 	}
-	if err := s.userRepo.UpdatePasswordHash(ctx, userID, string(hash)); err != nil {
-		return err
-	}
-	if err := s.userRepo.MarkPasswordResetTokenUsed(ctx, tokenHash); err != nil {
-		return err
-	}
-	return nil
+	return s.userRepo.UpdatePasswordHash(ctx, userID, string(hash))
 }
 
 func generateResetToken() (string, string, error) {

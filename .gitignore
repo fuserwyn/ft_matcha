@@ -30,6 +30,7 @@ vendor/
 *.test
 coverage.out
 *.out
+api/api
 
 # Frontend
 frontend/dist/

@@ -9,8 +9,8 @@ A dating web application that facilitates connections between users—from regis
 | **Frontend** | React, Vite, Tailwind CSS, React Router |
 | **Backend** | Go, Gin |
 | **Database** | PostgreSQL |
+| **Cache** | Redis (email verify, password reset tokens) |
 | **Search** | Elasticsearch |
-| **Cache** | Redis |
 | **File Storage** | MinIO |
 | **Email (dev)** | MailHog |
 | **Infrastructure** | Docker Compose |
@@ -34,11 +34,11 @@ A dating web application that facilitates connections between users—from regis
 │  └─────────────────┘   └────────┬────────┘                                                │
 │                                 │                                                          │
 │                   ┌─────────────┴─────────────────────────────────────────────────────┐  │
-│                   ▼             ▼              ▼           ▼         ▼                  │
-│             ┌──────────┐  ┌────────┐  ┌─────────────┐  ┌───────┐  ┌──────┐              │
-│             │PostgreSQL│  │ Redis  │  │Elasticsearch│  │MailHog│  │MinIO │              │
-│             │  :5432   │  │ :6379  │  │   :9200     │  │ :1025 │  │:9000 │              │
-│             └──────────┘  └────────┘  └─────────────┘  └───────┘  └──────┘              │
+│                   ▼              ▼           ▼         ▼                             │
+│             ┌──────────┐  ┌─────────────┐  ┌───────┐  ┌──────┐                        │
+│             │PostgreSQL│  │Elasticsearch│  │MailHog│  │MinIO │                        │
+│             │  :5432   │  │   :9200     │  │ :1025 │  │:9000 │                        │
+│             └──────────┘  └─────────────┘  └───────┘  └──────┘                        │
 │                                                                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 
@@ -52,7 +52,6 @@ A dating web application that facilitates connections between users—from regis
 | **Frontend** | 3000 | React SPA, UI, WebSocket client |
 | **API** | 8080 | REST API, WebSocket server |
 | **PostgreSQL** | 5432 | Profiles, auth, chat, likes, blocks |
-| **Redis** | 6379 | Sessions, pub/sub |
 | **Elasticsearch** | 9200 | Search, geo, recommendations |
 | **MailHog** | 8025, 1025 | SMTP for development |
 | **MinIO** | 9000, 9001 | Photo storage (S3-compatible) |
@@ -88,15 +87,11 @@ matcha/
 │   ├── src/
 │   │   ├── components/
 │   │   ├── pages/
-│   │   ├── hooks/
 │   │   ├── api/
-│   │   ├── stores/
-│   │   └── App.tsx
+│   │   └── context/
 │   ├── package.json
 │   ├── vite.config.ts
 │   └── Dockerfile
-└── docs/
-    └── STACK.md
 ```
 
 ## Frontend Stack (React)
@@ -121,8 +116,7 @@ React is a **JavaScript library** for building user interfaces. When we say "wri
 | **Framework** | Gin |
 | **Validation** | go-playground/validator |
 | **Passwords** | bcrypt |
-| **Sessions** | Redis + secure cookie |
-| **WebSocket** | gorilla/websocket or nhooyr.io/websocket |
+| **WebSocket** | gorilla/websocket |
 
 ## Getting Started
 

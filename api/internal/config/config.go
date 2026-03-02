@@ -12,6 +12,13 @@ func DatabaseURL() string {
 	return "postgres://matcha:matcha_secret@localhost:5432/matcha?sslmode=disable"
 }
 
+func RedisURL() string {
+	if v := os.Getenv("REDIS_URL"); v != "" {
+		return v
+	}
+	return "redis://localhost:6379/0"
+}
+
 func JWTSecret() string {
 	if v := os.Getenv("JWT_SECRET"); v != "" {
 		return v

@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -109,36 +108,6 @@ func (r *UserRepository) UpdatePasswordHash(ctx context.Context, userID uuid.UUI
 		SET password_hash = $2
 		WHERE id = $1
 	`, userID, passwordHash)
-	return err
-}
-
-func (r *UserRepository) StorePasswordResetToken(ctx context.Context, tokenHash string, userID uuid.UUID, expiresAt time.Time) error {
-	_, err := r.pool.Exec(ctx, `
-		INSERT INTO password_reset_tokens (token_hash, user_id, expires_at)
-		VALUES ($1, $2, $3)
-	`, tokenHash, userID, expiresAt)
-	return err
-}
-
-func (r *UserRepository) GetUserIDByValidResetToken(ctx context.Context, tokenHash string) (uuid.UUID, error) {
-	var userID uuid.UUID
-	err := r.pool.QueryRow(ctx, `
-		SELECT user_id
-		FROM password_reset_tokens
-		WHERE token_hash = $1
-			AND used_at IS NULL
-			AND expires_at > NOW()
-	`, tokenHash).Scan(&userID)
-	return userID, err
-}
-
-func (r *UserRepository) MarkPasswordResetTokenUsed(ctx context.Context, tokenHash string) error {
-	_, err := r.pool.Exec(ctx, `
-		UPDATE password_reset_tokens
-		SET used_at = NOW()
-		WHERE token_hash = $1
-			AND used_at IS NULL
-	`, tokenHash)
 	return err
 }
 

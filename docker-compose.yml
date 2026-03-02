@@ -44,6 +44,20 @@ services:
     networks:
       - matcha
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - matcha
+
   postgres:
     image: postgres:16-alpine
     environment:
@@ -58,20 +72,6 @@ services:
       test: ["CMD-SHELL", "pg_isready -U matcha -d matcha"]
       interval: 5s
       timeout: 5s
-      retries: 5
-    networks:
-      - matcha
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "${REDIS_PORT:-6379}:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
       retries: 5
     networks:
       - matcha

@@ -21,6 +21,7 @@ import (
 	"matcha/api/internal/repository"
 	"matcha/api/internal/search"
 	"matcha/api/internal/services"
+	"matcha/api/internal/store"
 	"matcha/api/internal/storage"
 	ws "matcha/api/internal/websocket"
 
@@ -66,7 +67,15 @@ func main() {
 	blockRepo := repository.NewBlockRepository(pool)
 	presenceRepo := repository.NewPresenceRepository(pool)
 	photoRepo := repository.NewPhotoRepository(pool)
-	authSvc := services.NewAuthService(userRepo)
+
+	tokenStore, err := store.NewTokenStore(config.RedisURL())
+	if err != nil {
+		log.Fatalf("redis: %v", err)
+	}
+	defer tokenStore.Close()
+	log.Println("Redis connected")
+
+	authSvc := services.NewAuthService(userRepo, tokenStore)
 	seedSvc := services.NewSeedService(userRepo, profileRepo, photoRepo)
 	mailer := services.NewMailer(
 		config.SMTPHost(),
@@ -121,6 +130,7 @@ func main() {
 		authSvc,
 		syncSvc,
 		mailer,
+		tokenStore,
 		config.JWTSecret(),
 		config.PublicAPIBaseURL(),
 		config.FrontendBaseURL(),
