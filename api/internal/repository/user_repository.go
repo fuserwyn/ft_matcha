@@ -27,6 +27,12 @@ type UserRepository struct {
 	pool *pgxpool.Pool
 }
 
+func (r *UserRepository) Count(ctx context.Context) (int, error) {
+	var total int
+	err := r.pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&total)
+	return total, err
+}
+
 func (r *UserRepository) Create(ctx context.Context, u *User) error {
 	_, err := r.pool.Exec(ctx, `
 		INSERT INTO users (id, username, email, password_hash, first_name, last_name, email_verified_at)

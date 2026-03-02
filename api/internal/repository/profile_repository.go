@@ -31,6 +31,37 @@ type ProfileRepository struct {
 	pool *pgxpool.Pool
 }
 
+func (r *ProfileRepository) CountByGender(ctx context.Context) (male int, female int, err error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT gender, COUNT(*)::int
+		FROM profiles
+		WHERE gender IN ('male', 'female')
+		GROUP BY gender
+	`)
+	if err != nil {
+		return 0, 0, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var gender string
+		var count int
+		if err := rows.Scan(&gender, &count); err != nil {
+			return 0, 0, err
+		}
+		switch gender {
+		case "male":
+			male = count
+		case "female":
+			female = count
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return 0, 0, err
+	}
+	return male, female, nil
+}
+
 func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (*Profile, error) {
 	var p Profile
 	err := r.pool.QueryRow(ctx, `

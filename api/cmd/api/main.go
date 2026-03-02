@@ -65,6 +65,7 @@ func main() {
 	presenceRepo := repository.NewPresenceRepository(pool)
 	photoRepo := repository.NewPhotoRepository(pool)
 	authSvc := services.NewAuthService(userRepo)
+	seedSvc := services.NewSeedService(userRepo, profileRepo)
 	mailer := services.NewMailer(
 		config.SMTPHost(),
 		config.SMTPPort(),
@@ -96,6 +97,17 @@ func main() {
 		log.Fatalf("elasticsearch index: %v", err)
 	}
 	syncSvc := services.NewSyncService(userRepo, profileRepo, searchClient)
+	if config.SeedUsersEnabled() {
+		created, total, err := seedSvc.EnsureMinimumUsers(ctx, config.MinUsersCount())
+		if err != nil {
+			log.Fatalf("seed users: %v", err)
+		}
+		if created > 0 {
+			log.Printf("Seeded users: +%d (total %d)", created, total)
+		} else {
+			log.Printf("Seed users skipped: already %d users", total)
+		}
+	}
 	if err := syncSvc.ReindexAll(ctx); err != nil {
 		log.Printf("elasticsearch reindex: %v (continuing)", err)
 	}

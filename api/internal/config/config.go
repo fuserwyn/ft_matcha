@@ -111,3 +111,19 @@ func FrontendBaseURL() string {
 	}
 	return "http://localhost:3000"
 }
+
+func SeedUsersEnabled() bool {
+	if v := os.Getenv("SEED_USERS_ENABLED"); v != "" {
+		return v == "1" || v == "true" || v == "TRUE"
+	}
+	return true
+}
+
+func MinUsersCount() int {
+	if v := os.Getenv("MIN_USERS_COUNT"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return 500
+}
