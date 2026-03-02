@@ -301,14 +301,23 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 	}
 	switch f.SortBy {
 	case "age":
-		// older age means earlier birth date
+		// older age = earlier birth_date; asc = younger first, desc = older first
 		if sortOrder == "asc" {
-			sort = []map[string]interface{}{{"birth_date": map[string]interface{}{"order": "desc"}}}
+			sort = []map[string]interface{}{
+				{"birth_date": map[string]interface{}{"order": "desc"}},
+				{"fame_rating": map[string]interface{}{"order": "desc"}},
+			}
 		} else {
-			sort = []map[string]interface{}{{"birth_date": map[string]interface{}{"order": "asc"}}}
+			sort = []map[string]interface{}{
+				{"birth_date": map[string]interface{}{"order": "asc"}},
+				{"fame_rating": map[string]interface{}{"order": "desc"}},
+			}
 		}
 	case "fame":
-		sort = []map[string]interface{}{{"fame_rating": map[string]interface{}{"order": sortOrder}}}
+		sort = []map[string]interface{}{
+			{"fame_rating": map[string]interface{}{"order": sortOrder}},
+			{"created_at": map[string]interface{}{"order": "desc"}},
+		}
 	case "location":
 		if f.UserLat != nil && f.UserLon != nil {
 			sort = []map[string]interface{}{
@@ -319,6 +328,13 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 						"unit":     "km",
 					},
 				},
+				{"fame_rating": map[string]interface{}{"order": "desc"}},
+			}
+		} else {
+			// Fallback when user has no location: sort by fame
+			sort = []map[string]interface{}{
+				{"fame_rating": map[string]interface{}{"order": sortOrder}},
+				{"created_at": map[string]interface{}{"order": "desc"}},
 			}
 		}
 	case "tags":
@@ -348,6 +364,12 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 			sort = []map[string]interface{}{
 				{"_score": map[string]interface{}{"order": order}},
 				{"fame_rating": map[string]interface{}{"order": "desc"}},
+			}
+		} else {
+			// Fallback when user has no tags: sort by fame
+			sort = []map[string]interface{}{
+				{"fame_rating": map[string]interface{}{"order": sortOrder}},
+				{"created_at": map[string]interface{}{"order": "desc"}},
 			}
 		}
 	}
