@@ -13,6 +13,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 
 	"matcha/api/internal/config"
 	"matcha/api/internal/database"
@@ -149,15 +150,29 @@ func main() {
 	presenceH := handlers.NewPresenceHandler(presenceRepo, wsHub)
 
 	r := gin.Default()
-	allowOrigins := []string{config.CORSOrigin()}
-	if config.CORSOrigin() == "http://localhost:3000" {
-		allowOrigins = append(allowOrigins, "http://127.0.0.1:3000")
-	}
+	// Allow localhost, 127.0.0.1, private IPs (192.168.x.x, 10.x.x.x), null, and CORS_ORIGIN
+	allowedOrigin := config.CORSOrigin()
+	localOriginRE := regexp.MustCompile(`^https?://(localhost|127\.0\.0\.1)(:\d+)?$`)
+	privateIPRE := regexp.MustCompile(`^https?://(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+)(:\d+)?$`)
 	r.Use(cors.New(cors.Config{
-		AllowOrigins:     allowOrigins,
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
 		AllowCredentials: true,
+		AllowOriginFunc: func(origin string) bool {
+			if origin == "" || origin == "null" {
+				return true
+			}
+			if origin == allowedOrigin {
+				return true
+			}
+			if localOriginRE.MatchString(origin) {
+				return true
+			}
+			if privateIPRE.MatchString(origin) {
+				return true
+			}
+			return false
+		},
 	}))
 
 	r.GET("/health", health)

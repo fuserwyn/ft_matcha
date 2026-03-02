@@ -1,6 +1,6 @@
 COMPOSE=docker compose
 
-.PHONY: up down rebuild run logs api-logs ps e2e test dev dev-api dev-infra
+.PHONY: up down rebuild run logs api-logs ps e2e test dev dev-api dev-infra lan-ip
 
 # Development: hot reload without rebuilding Docker
 dev-infra:
@@ -26,8 +26,8 @@ rebuild:
 
 run:
 	$(COMPOSE) down --remove-orphans --timeout 10
-	BUILDX_NO_DEFAULT_ATTESTATIONS=1 $(COMPOSE) build --no-cache api
-	BUILDX_NO_DEFAULT_ATTESTATIONS=1 $(COMPOSE) build --no-cache frontend
+	DOCKER_BUILDKIT=0 $(COMPOSE) build --no-cache api
+	DOCKER_BUILDKIT=0 $(COMPOSE) build --no-cache frontend
 	$(COMPOSE) up -d --force-recreate
 
 logs:
@@ -44,3 +44,8 @@ e2e:
 
 test:
 	cd api && go test ./...
+
+# Detect local IP and update .env for mobile/LAN access
+lan-ip:
+	@chmod +x scripts/set-lan-ip.sh 2>/dev/null || true
+	@./scripts/set-lan-ip.sh

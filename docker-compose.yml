@@ -8,7 +8,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - MINIO_ENDPOINT=minio:9000
-      - MINIO_PUBLIC_URL=http://localhost:${MINIO_PORT:-9000}
+      - MINIO_PUBLIC_URL=${MINIO_PUBLIC_URL:-http://localhost:9000}
       - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
       - MINIO_BUCKET=${MINIO_BUCKET:-matcha-photos}
@@ -18,7 +18,7 @@ services:
       - SMTP_FROM=${SMTP_FROM:-noreply@matcha.local}
       - SMTP_COOLDOWN_SECONDS=${SMTP_COOLDOWN_SECONDS:-30}
       - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
-      - CORS_ORIGIN=http://localhost:3000
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
     depends_on:
       postgres:
         condition: service_healthy
@@ -38,7 +38,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     environment:
-      - VITE_API_URL=http://localhost:${API_PORT:-8080}
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:8080}
     depends_on:
       - api
     networks:
