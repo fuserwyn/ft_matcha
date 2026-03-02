@@ -9,6 +9,7 @@ import (
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
 	"matcha/api/internal/services"
+	ws "matcha/api/internal/websocket"
 )
 
 type ChatHandler struct {
@@ -17,6 +18,7 @@ type ChatHandler struct {
 	userRepo         *repository.UserRepository
 	notificationRepo *repository.NotificationRepository
 	mailer           *services.Mailer
+	hub              *ws.Hub
 }
 
 func NewChatHandler(
@@ -25,6 +27,7 @@ func NewChatHandler(
 	userRepo *repository.UserRepository,
 	notificationRepo *repository.NotificationRepository,
 	mailer *services.Mailer,
+	hub *ws.Hub,
 ) *ChatHandler {
 	return &ChatHandler{
 		messageRepo:      messageRepo,
@@ -32,6 +35,7 @@ func NewChatHandler(
 		userRepo:         userRepo,
 		notificationRepo: notificationRepo,
 		mailer:           mailer,
+		hub:              hub,
 	}
 }
 
@@ -110,6 +114,22 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 			"New message on Matcha",
 			fromUser.FirstName+" "+fromUser.LastName+" sent you a message.",
 		)
+	}
+	if h.hub != nil {
+		event := gin.H{
+			"type": "message",
+			"data": gin.H{
+				"id":          m.ID,
+				"sender_id":   m.SenderID,
+				"receiver_id": m.ReceiverID,
+				"content":     m.Content,
+				"created_at":  m.CreatedAt,
+				"is_read":     m.IsRead,
+				"read_at":     m.ReadAt,
+			},
+		}
+		h.hub.SendToUser(myID, event)
+		h.hub.SendToUser(otherID, event)
 	}
 
 	c.JSON(http.StatusCreated, gin.H{

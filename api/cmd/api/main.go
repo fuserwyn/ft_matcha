@@ -127,11 +127,11 @@ func main() {
 	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, syncSvc)
 	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, discoveryRepo, syncSvc)
 	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, notificationRepo, mailer, syncSvc)
-	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, notificationRepo, mailer)
+	wsHub := ws.NewHub()
+	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, notificationRepo, mailer, wsHub)
 	photoH := handlers.NewPhotoHandler(photoRepo, minioStore)
 	notificationsH := handlers.NewNotificationsHandler(notificationRepo)
 	reportsH := handlers.NewReportsHandler(reportRepo, userRepo)
-	wsHub := ws.NewHub()
 	wsChatH := ws.NewChatHandler(wsHub, likeRepo, messageRepo, userRepo, notificationRepo, presenceRepo, mailer, config.JWTSecret())
 	presenceH := handlers.NewPresenceHandler(presenceRepo, wsHub)
 
