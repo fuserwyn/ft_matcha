@@ -42,6 +42,8 @@ func TestChatPresenceNotificationsE2E(t *testing.T) {
 	// A/B: full happy path (match + ws + notifications + read/unread + presence)
 	userA := registerUser(t, public, "a")
 	userB := registerUser(t, public, "b")
+	_ = postPhoto(t, &httpClient{base: public.base, token: userA.Token, c: public.c}, "/api/v1/photos", "a.png", tinyPNG())
+	_ = postPhoto(t, &httpClient{base: public.base, token: userB.Token, c: public.c}, "/api/v1/photos", "b.png", tinyPNG())
 
 	a := &httpClient{base: public.base, token: userA.Token, c: public.c}
 	b := &httpClient{base: public.base, token: userB.Token, c: public.c}
@@ -101,6 +103,8 @@ func TestChatPresenceNotificationsE2E(t *testing.T) {
 	// C/D: no-match blocked flow
 	userC := registerUser(t, public, "c")
 	userD := registerUser(t, public, "d")
+	_ = postPhoto(t, &httpClient{base: public.base, token: userC.Token, c: public.c}, "/api/v1/photos", "c.png", tinyPNG())
+	_ = postPhoto(t, &httpClient{base: public.base, token: userD.Token, c: public.c}, "/api/v1/photos", "d.png", tinyPNG())
 	cu := &httpClient{base: public.base, token: userC.Token, c: public.c}
 	postNoBody(t, cu, "/api/v1/users/"+userD.ID.String()+"/like")
 
@@ -136,6 +140,7 @@ func TestPhotoUploadAndEmailLikeE2E(t *testing.T) {
 
 	userA := registerUser(t, public, "pa")
 	userB := registerUser(t, public, "pb")
+	_ = postPhoto(t, &httpClient{base: public.base, token: userB.Token, c: public.c}, "/api/v1/photos", "b.png", tinyPNG())
 	a := &httpClient{base: public.base, token: userA.Token, c: public.c}
 	b := &httpClient{base: public.base, token: userB.Token, c: public.c}
 
@@ -222,9 +227,254 @@ func TestBlockSearchVisitAndPresenceE2E(t *testing.T) {
 	}
 }
 
+func TestAuthAndProfileE2E(t *testing.T) {
+	if os.Getenv("RUN_E2E") != "1" {
+		t.Skip("set RUN_E2E=1 to run e2e tests")
+	}
+	base := os.Getenv("E2E_API_BASE")
+	if base == "" {
+		base = "http://localhost:8080"
+	}
+	mailhogBase := os.Getenv("E2E_MAILHOG_BASE")
+	if mailhogBase == "" {
+		mailhogBase = "http://localhost:8025"
+	}
+	public := &httpClient{base: strings.TrimRight(base, "/"), c: &http.Client{Timeout: 10 * time.Second}}
+
+	u := registerUser(t, public, "auth")
+	verifyEmailFromMailhog(t, mailhogBase, public.base, u.Username+"@example.com")
+	client := &httpClient{base: public.base, token: u.Token, c: public.c}
+
+	// Login (verify login works)
+	loginOut := postJSON(t, public, "/api/v1/auth/login", map[string]any{
+		"username": u.Username,
+		"password": "password123",
+	})
+	if loginOut["token"] == nil {
+		t.Fatalf("login failed: %#v", loginOut)
+	}
+	me := getJSON(t, client, "/api/v1/auth/me")
+	if me["id"] == nil {
+		t.Fatalf("auth/me failed: %#v", me)
+	}
+
+	// Update profile
+	putJSON(t, client, "/api/v1/profile/me", map[string]any{
+		"bio":               "e2e bio",
+		"gender":            "male",
+		"sexual_preference": "female",
+		"birth_date":        "1995-01-15",
+		"city":              "Paris",
+		"latitude":          48.8566,
+		"longitude":         2.3522,
+	})
+	profile := getJSON(t, client, "/api/v1/profile/me")
+	if bio, _ := profile["bio"].(string); bio != "e2e bio" {
+		t.Fatalf("profile bio not updated: %#v", profile)
+	}
+
+	// Tags
+	putJSON(t, client, "/api/v1/profile/me/tags", map[string]any{"tags": []string{"music", "travel"}})
+	tagsResp := getJSON(t, client, "/api/v1/profile/me/tags")
+	if tags, _ := tagsResp["tags"].([]any); len(tags) != 2 {
+		t.Fatalf("tags not updated: %#v", tagsResp)
+	}
+
+	// Tag suggestions
+	sugg := getJSON(t, client, "/api/v1/profile/tags/suggestions")
+	if sugg["tags"] == nil {
+		t.Fatalf("tag suggestions empty: %#v", sugg)
+	}
+}
+
+func TestLikeWithoutPhotoE2E(t *testing.T) {
+	if os.Getenv("RUN_E2E") != "1" {
+		t.Skip("set RUN_E2E=1 to run e2e tests")
+	}
+	base := os.Getenv("E2E_API_BASE")
+	if base == "" {
+		base = "http://localhost:8080"
+	}
+	public := &httpClient{base: strings.TrimRight(base, "/"), c: &http.Client{Timeout: 10 * time.Second}}
+
+	userA := registerUser(t, public, "nophoto")
+	userB := registerUser(t, public, "target")
+	_ = postPhoto(t, &httpClient{base: public.base, token: userB.Token, c: public.c}, "/api/v1/photos", "b.png", tinyPNG())
+
+	a := &httpClient{base: public.base, token: userA.Token, c: public.c}
+	assertStatusJSON(t, a, http.MethodPost, "/api/v1/users/"+userB.ID.String()+"/like", map[string]any{}, http.StatusBadRequest)
+}
+
+func TestUnlikeAndReportE2E(t *testing.T) {
+	if os.Getenv("RUN_E2E") != "1" {
+		t.Skip("set RUN_E2E=1 to run e2e tests")
+	}
+	base := os.Getenv("E2E_API_BASE")
+	if base == "" {
+		base = "http://localhost:8080"
+	}
+	public := &httpClient{base: strings.TrimRight(base, "/"), c: &http.Client{Timeout: 10 * time.Second}}
+
+	userA := registerUser(t, public, "unlike_a")
+	userB := registerUser(t, public, "unlike_b")
+	_ = postPhoto(t, &httpClient{base: public.base, token: userA.Token, c: public.c}, "/api/v1/photos", "a.png", tinyPNG())
+	_ = postPhoto(t, &httpClient{base: public.base, token: userB.Token, c: public.c}, "/api/v1/photos", "b.png", tinyPNG())
+
+	a := &httpClient{base: public.base, token: userA.Token, c: public.c}
+
+	postNoBody(t, a, "/api/v1/users/"+userB.ID.String()+"/like")
+	liked := getJSON(t, a, "/api/v1/likes")
+	if !containsUser(liked, userB.ID.String()) {
+		t.Fatalf("expected B in A likes: %#v", liked)
+	}
+
+	deleteNoBody(t, a, "/api/v1/users/"+userB.ID.String()+"/like")
+	likedAfter := getJSON(t, a, "/api/v1/likes")
+	if containsUser(likedAfter, userB.ID.String()) {
+		t.Fatalf("unlike failed, B still in likes: %#v", likedAfter)
+	}
+
+	postJSON(t, a, "/api/v1/users/"+userB.ID.String()+"/report", map[string]any{
+		"reason":  "fake_account",
+		"comment": "e2e report",
+	})
+	reports := getJSON(t, a, "/api/v1/reports/me")
+	if items, _ := reports["items"].([]any); len(items) < 1 {
+		t.Fatalf("report not listed: %#v", reports)
+	}
+}
+
+func TestUnblockE2E(t *testing.T) {
+	if os.Getenv("RUN_E2E") != "1" {
+		t.Skip("set RUN_E2E=1 to run e2e tests")
+	}
+	base := os.Getenv("E2E_API_BASE")
+	if base == "" {
+		base = "http://localhost:8080"
+	}
+	public := &httpClient{base: strings.TrimRight(base, "/"), c: &http.Client{Timeout: 10 * time.Second}}
+
+	userA := registerUser(t, public, "unblk_a")
+	userB := registerUser(t, public, "unblk_b")
+	_ = postPhoto(t, &httpClient{base: public.base, token: userA.Token, c: public.c}, "/api/v1/photos", "a.png", tinyPNG())
+	_ = postPhoto(t, &httpClient{base: public.base, token: userB.Token, c: public.c}, "/api/v1/photos", "b.png", tinyPNG())
+
+	a := &httpClient{base: public.base, token: userA.Token, c: public.c}
+	postNoBody(t, a, "/api/v1/users/"+userB.ID.String()+"/block")
+	list := getJSON(t, a, "/api/v1/users")
+	if containsUser(list, userB.ID.String()) {
+		t.Fatalf("B should not appear after block: %#v", list)
+	}
+
+	deleteNoBody(t, a, "/api/v1/users/"+userB.ID.String()+"/block")
+	listAfter := getJSON(t, a, "/api/v1/users")
+	if !containsUser(listAfter, userB.ID.String()) {
+		t.Fatalf("B should appear after unblock: %#v", listAfter)
+	}
+}
+
+func TestPhotosAndDiscoveryE2E(t *testing.T) {
+	if os.Getenv("RUN_E2E") != "1" {
+		t.Skip("set RUN_E2E=1 to run e2e tests")
+	}
+	base := os.Getenv("E2E_API_BASE")
+	if base == "" {
+		base = "http://localhost:8080"
+	}
+	public := &httpClient{base: strings.TrimRight(base, "/"), c: &http.Client{Timeout: 10 * time.Second}}
+
+	userA := registerUser(t, public, "photo_a")
+	a := &httpClient{base: public.base, token: userA.Token, c: public.c}
+
+	p1 := postPhoto(t, a, "/api/v1/photos", "1.png", tinyPNG())
+	p2 := postPhoto(t, a, "/api/v1/photos", "2.png", tinyPNG())
+	pid1, _ := p1["id"].(string)
+	pid2, _ := p2["id"].(string)
+	if pid1 == "" || pid2 == "" {
+		t.Fatalf("photo ids missing: %#v %#v", p1, p2)
+	}
+
+	patchNoBody(t, a, "/api/v1/photos/"+pid2+"/primary")
+	photos := getJSON(t, a, "/api/v1/photos/me")
+	if items, ok := photos["items"].([]any); ok {
+		for _, it := range items {
+			row, _ := it.(map[string]any)
+			if row["id"] == pid2 && !row["is_primary"].(bool) {
+				t.Fatalf("photo 2 should be primary: %#v", items)
+			}
+		}
+	}
+
+	deleteNoBody(t, a, "/api/v1/photos/"+pid1)
+	photosAfter := getJSON(t, a, "/api/v1/photos/me")
+	if items, ok := photosAfter["items"].([]any); ok {
+		for _, it := range items {
+			if it.(map[string]any)["id"] == pid1 {
+				t.Fatalf("photo 1 should be deleted: %#v", items)
+			}
+		}
+	}
+
+	// Discovery search with filters
+	search := getJSON(t, a, "/api/v1/users?gender=female&min_age=18&max_age=99&city=Paris&limit=5")
+	if search["items"] == nil {
+		t.Fatalf("search returned no items key: %#v", search)
+	}
+}
+
+func TestRESTChatAndViewsE2E(t *testing.T) {
+	if os.Getenv("RUN_E2E") != "1" {
+		t.Skip("set RUN_E2E=1 to run e2e tests")
+	}
+	base := os.Getenv("E2E_API_BASE")
+	if base == "" {
+		base = "http://localhost:8080"
+	}
+	public := &httpClient{base: strings.TrimRight(base, "/"), c: &http.Client{Timeout: 10 * time.Second}}
+
+	userA := registerUser(t, public, "chat_a")
+	userB := registerUser(t, public, "chat_b")
+	_ = postPhoto(t, &httpClient{base: public.base, token: userA.Token, c: public.c}, "/api/v1/photos", "a.png", tinyPNG())
+	_ = postPhoto(t, &httpClient{base: public.base, token: userB.Token, c: public.c}, "/api/v1/photos", "b.png", tinyPNG())
+
+	a := &httpClient{base: public.base, token: userA.Token, c: public.c}
+	b := &httpClient{base: public.base, token: userB.Token, c: public.c}
+
+	postNoBody(t, a, "/api/v1/users/"+userB.ID.String()+"/like")
+	postNoBody(t, b, "/api/v1/users/"+userA.ID.String()+"/like")
+
+	postJSON(t, a, "/api/v1/users/"+userB.ID.String()+"/messages", map[string]any{"content": "hello rest"})
+	msgs := getJSON(t, a, "/api/v1/users/"+userB.ID.String()+"/messages")
+	if items, _ := msgs["items"].([]any); len(items) < 1 {
+		t.Fatalf("messages empty: %#v", msgs)
+	}
+
+	patchNoBody(t, b, "/api/v1/users/"+userA.ID.String()+"/messages/read")
+	msgsAfter := getJSON(t, b, "/api/v1/users/"+userA.ID.String()+"/messages")
+	if containsUnreadFrom(msgsAfter, userA.ID.String()) {
+		t.Fatalf("messages should be read: %#v", msgsAfter)
+	}
+
+	_ = getJSON(t, a, "/api/v1/users/"+userB.ID.String())
+	views := getJSON(t, a, "/api/v1/profile/me/views")
+	if items, _ := views["items"].([]any); len(items) < 1 {
+		t.Fatalf("views empty after visiting B: %#v", views)
+	}
+
+	notifs := getJSON(t, b, "/api/v1/notifications")
+	patchNoBody(t, b, "/api/v1/notifications/read-all")
+	if notifs["items"] != nil {
+		notifsAfter := getJSON(t, b, "/api/v1/notifications?unread_only=true")
+		if items, _ := notifsAfter["items"].([]any); len(items) != 0 {
+			t.Fatalf("notifications should be read: %#v", notifsAfter)
+		}
+	}
+}
+
 type registeredUser struct {
-	ID    uuid.UUID
-	Token string
+	ID       uuid.UUID
+	Token    string
+	Username string
 }
 
 func registerUser(t *testing.T, c *httpClient, prefix string) registeredUser {
@@ -248,7 +498,7 @@ func registerUser(t *testing.T, c *httpClient, prefix string) registeredUser {
 	if err != nil {
 		t.Fatalf("parse user id: %v", err)
 	}
-	return registeredUser{ID: id, Token: token}
+	return registeredUser{ID: id, Token: token, Username: username}
 }
 
 func openWS(t *testing.T, apiBase, token string) *websocket.Conn {
@@ -361,6 +611,26 @@ func patchNoBody(t *testing.T, c *httpClient, path string) {
 		}
 	}()
 	_ = c.do(http.MethodPatch, path, map[string]any{})
+}
+
+func deleteNoBody(t *testing.T, c *httpClient, path string) {
+	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("deleteNoBody panic: %v", r)
+		}
+	}()
+	_ = c.do(http.MethodDelete, path, nil)
+}
+
+func putJSON(t *testing.T, c *httpClient, path string, body any) map[string]any {
+	t.Helper()
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("putJSON panic: %v", r)
+		}
+	}()
+	return c.do(http.MethodPut, path, body)
 }
 
 func getJSON(t *testing.T, c *httpClient, path string) map[string]any {
@@ -551,4 +821,85 @@ func waitForMailhogTotalAtLeast(t *testing.T, mailhogBase string, minTotal int, 
 		time.Sleep(300 * time.Millisecond)
 	}
 	t.Fatalf("mailhog total did not reach %d within %s", minTotal, timeout)
+}
+
+func verifyEmailFromMailhog(t *testing.T, mailhogBase, apiBase, toEmail string) {
+	t.Helper()
+	mailhogBase = strings.TrimRight(mailhogBase, "/")
+	apiBase = strings.TrimRight(apiBase, "/")
+
+	// Wait for verification email to arrive (async send)
+	for attempt := 0; attempt < 10; attempt++ {
+		if tryVerifyFromMailhog(t, mailhogBase, apiBase, toEmail) {
+			return
+		}
+		time.Sleep(300 * time.Millisecond)
+	}
+	t.Fatalf("no verification email found for %s in MailHog after retries", toEmail)
+}
+
+func tryVerifyFromMailhog(t *testing.T, mailhogBase, apiBase, toEmail string) bool {
+	t.Helper()
+	// Get recent messages from v2 API (returns "items")
+	resp, err := http.Get(mailhogBase + "/api/v2/messages?limit=50")
+	if err != nil {
+		t.Fatalf("mailhog messages: %v", err)
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Items []struct {
+			ID      string `json:"ID"`
+			To      []struct {
+				Mailbox string `json:"Mailbox"`
+				Domain string `json:"Domain"`
+			} `json:"To"`
+			Content struct {
+				Body string `json:"Body"`
+			} `json:"Content"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		t.Fatalf("mailhog messages decode: %v", err)
+	}
+	// Find message to this email with verification link
+	for i := range out.Items {
+		m := &out.Items[i]
+		for _, to := range m.To {
+			addr := to.Mailbox + "@" + to.Domain
+			if addr == toEmail && strings.Contains(m.Content.Body, "verify-email?token=") {
+				extractAndVerify(t, apiBase, m.Content.Body)
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func extractAndVerify(t *testing.T, apiBase, body string) {
+	t.Helper()
+	// Extract token from verify-email?token=XXX
+	idx := strings.Index(body, "verify-email?token=")
+	if idx < 0 {
+		t.Fatalf("no verify-email link in body")
+	}
+	idx += len("verify-email?token=")
+	end := strings.IndexAny(body[idx:], " \n\r\t")
+	token := body[idx:]
+	if end >= 0 {
+		token = body[idx : idx+end]
+	}
+	token = strings.TrimSpace(token)
+	if token == "" {
+		t.Fatalf("empty token in verify link")
+	}
+	verifyURL := apiBase + "/api/v1/auth/verify-email?token=" + token
+	resp2, err := http.Get(verifyURL)
+	if err != nil {
+		t.Fatalf("verify request: %v", err)
+	}
+	defer resp2.Body.Close()
+	if resp2.StatusCode != http.StatusOK {
+		raw, _ := io.ReadAll(resp2.Body)
+		t.Fatalf("verify failed: status=%d body=%s", resp2.StatusCode, string(raw))
+	}
 }
