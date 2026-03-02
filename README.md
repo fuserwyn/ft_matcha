@@ -22,24 +22,24 @@ A dating web application that facilitates connections between users—from regis
 │                              Docker Compose                                              │
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                          │
-│  ┌─────────────────┐   ┌──────────────────┐                                                │
-│  │   Frontend      │   │   API (Go)       │                                                │
-│  │   React         │   │   :8080          │                                                │
-│  │   :3000         │──►│                  │                                                │
-│  │                 │   │  • Auth          │                                                │
-│  │  Vite + React   │   │  • Profile       │                                                │
-│  │  Tailwind       │   │  • Search        │                                                │
-│  │  React Router   │   │  • WebSocket     │                                                │
-│  │  WebSocket      │   │                  │                                                │
-│  └─────────────────┘   └────────┬────────┘                                                │
-│                                 │                                                          │
+│  ┌─────────────────┐   ┌──────────────────┐                                              │
+│  │   Frontend      │   │   API (Go)       │                                              │
+│  │   React         │   │   :8080          │                                              │
+│  │   :3000         │──►│                  │                                              │
+│  │                 │   │  • Auth          │                                              │
+│  │  Vite + React   │   │  • Profile       │                                              │
+│  │  Tailwind       │   │  • Search        │                                              │
+│  │  React Router   │   │  • WebSocket     │                                              │
+│  │  WebSocket      │   │                  │                                              │
+│  └─────────────────┘   └────────┬────────┘                                               │
+│                                 │                                                        │
 │                   ┌─────────────┴─────────────────────────────────────────────────────┐  │
-│                   ▼              ▼           ▼         ▼                             │
-│             ┌──────────┐  ┌─────────────┐  ┌───────┐  ┌──────┐                        │
-│             │PostgreSQL│  │Elasticsearch│  │MailHog│  │MinIO │                        │
-│             │  :5432   │  │   :9200     │  │ :1025 │  │:9000 │                        │
-│             └──────────┘  └─────────────┘  └───────┘  └──────┘                        │
-│                                                                                          │
+│                   ▼              ▼           ▼         ▼                              │ |
+│             ┌──────────┐  ┌─────────────┐  ┌───────┐  ┌──────┐                        │ |
+│             │PostgreSQL│  │Elasticsearch│  │MailHog│  │MinIO │                        │ |
+│             │  :5432   │  │   :9200     │  │ :1025 │  │:9000 │                        │ |
+│             └──────────┘  └─────────────┘  └───────┘  └──────┘                        │ |
+│                                                                                         │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 
                           Browser → http://localhost:3000 (React) → API :8080
@@ -50,7 +50,7 @@ A dating web application that facilitates connections between users—from regis
 | Service | Port | Purpose |
 |---------|------|---------|
 | **Frontend** | 3000 | React SPA, UI, WebSocket client |
-| **API** | 8080 | REST API, WebSocket server |
+| **API** | 8080 | REST API, WebSocket server, Swagger at `/swagger/index.html` |
 | **PostgreSQL** | 5432 | Profiles, auth, chat, likes, blocks |
 | **Elasticsearch** | 9200 | Search, geo, recommendations |
 | **MailHog** | 8025, 1025 | SMTP for development |
@@ -124,8 +124,9 @@ React is a **JavaScript library** for building user interfaces. When we say "wri
 2. Start the stack: `make up` (or `docker compose up -d`).
 3. Open http://localhost:3000 for the frontend.
 4. API runs at http://localhost:8080.
-5. MailHog UI is available at http://localhost:8025.
-6. MinIO console is available at http://localhost:9001.
+5. **Swagger** API docs: http://localhost:8080/swagger/index.html
+6. MailHog UI is available at http://localhost:8025.
+7. MinIO console is available at http://localhost:9001.
 
 ## Useful Commands
 

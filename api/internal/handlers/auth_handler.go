@@ -307,6 +307,18 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	})
 }
 
+// UpdateMe godoc
+// @Summary	Update account (username, email, first_name, last_name)
+// @Tags		auth
+// @Security	BearerAuth
+// @Accept		json
+// @Produce	json
+// @Param		body	body		UpdateAccountReq	true	"Account fields"
+// @Success	200	{object}	map[string]interface{}
+// @Failure	400	{object}	map[string]string
+// @Failure	401	{object}	map[string]string
+// @Failure	409	{object}	map[string]string
+// @Router		/api/v1/auth/me [patch]
 func (h *AuthHandler) UpdateMe(c *gin.Context) {
 	userID, _ := c.Get(middleware.UserIDKey)
 	id := userID.(uuid.UUID)

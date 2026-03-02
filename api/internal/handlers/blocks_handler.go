@@ -18,6 +18,17 @@ func NewBlocksHandler(blocks *repository.BlockRepository, users *repository.User
 	return &BlocksHandler{blocks: blocks, users: users}
 }
 
+// BlockUser godoc
+// @Summary	Block a user
+// @Tags		blocks
+// @Security	BearerAuth
+// @Produce	json
+// @Param		id	path		string	true	"User ID to block"
+// @Success	200	{object}	map[string]interface{}
+// @Failure	400	{object}	map[string]string
+// @Failure	404	{object}	map[string]string
+// @Failure	500	{object}	map[string]string
+// @Router		/api/v1/users/{id}/block [post]
 func (h *BlocksHandler) BlockUser(c *gin.Context) {
 	me := c.MustGet(middleware.UserIDKey).(uuid.UUID)
 	otherID, err := uuid.Parse(c.Param("id"))
@@ -40,6 +51,15 @@ func (h *BlocksHandler) BlockUser(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// UnblockUser godoc
+// @Summary	Unblock a user
+// @Tags		blocks
+// @Security	BearerAuth
+// @Param		id	path		string	true	"User ID to unblock"
+// @Success	204	"No Content"
+// @Failure	400	{object}	map[string]string
+// @Failure	500	{object}	map[string]string
+// @Router		/api/v1/users/{id}/block [delete]
 func (h *BlocksHandler) UnblockUser(c *gin.Context) {
 	me := c.MustGet(middleware.UserIDKey).(uuid.UUID)
 	otherID, err := uuid.Parse(c.Param("id"))

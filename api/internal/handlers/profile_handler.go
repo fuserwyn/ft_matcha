@@ -283,6 +283,14 @@ func (h *ProfileHandler) GetViewedHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// TagSuggestions godoc
+// @Summary	Get tag suggestions (top tags)
+// @Tags		profile
+// @Security	BearerAuth
+// @Produce	json
+// @Success	200	{object}	map[string]interface{}
+// @Failure	500	{object}	map[string]string
+// @Router		/api/v1/profile/tags/suggestions [get]
 func (h *ProfileHandler) TagSuggestions(c *gin.Context) {
 	tags, err := h.profileRepo.ListTopTags(c.Request.Context(), 20)
 	if err != nil {
