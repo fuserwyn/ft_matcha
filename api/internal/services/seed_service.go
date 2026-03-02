@@ -16,10 +16,15 @@ import (
 type SeedService struct {
 	userRepo    *repository.UserRepository
 	profileRepo *repository.ProfileRepository
+	photoRepo   *repository.PhotoRepository
 }
 
-func NewSeedService(userRepo *repository.UserRepository, profileRepo *repository.ProfileRepository) *SeedService {
-	return &SeedService{userRepo: userRepo, profileRepo: profileRepo}
+func NewSeedService(
+	userRepo *repository.UserRepository,
+	profileRepo *repository.ProfileRepository,
+	photoRepo *repository.PhotoRepository,
+) *SeedService {
+	return &SeedService{userRepo: userRepo, profileRepo: profileRepo, photoRepo: photoRepo}
 }
 
 func (s *SeedService) EnsureMinimumUsers(ctx context.Context, minimum int) (int, int, error) {
@@ -135,8 +140,24 @@ func (s *SeedService) createSeedUser(ctx context.Context, hash []byte, rng *rand
 		if err := s.profileRepo.SetTags(ctx, user.ID, tags); err != nil {
 			return err
 		}
+		if err := s.createDefaultPhotos(ctx, user.ID, user.Username, rng); err != nil {
+			return err
+		}
 		return nil
 	}
+}
+
+func (s *SeedService) createDefaultPhotos(ctx context.Context, userID uuid.UUID, username string, rng *rand.Rand) error {
+	photoCount := 1 + rng.Intn(2)
+	for i := 0; i < photoCount; i++ {
+		objectKey := fmt.Sprintf("seed/default/%s/%02d.jpg", userID.String(), i+1)
+		seed := fmt.Sprintf("%s_%02d", username, i+1)
+		url := fmt.Sprintf("https://picsum.photos/seed/%s/600/800", seed)
+		if _, err := s.photoRepo.Create(ctx, userID, objectKey, url, i == 0); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func randomFrom(rng *rand.Rand, values []string) string {

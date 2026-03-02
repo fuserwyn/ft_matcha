@@ -65,7 +65,7 @@ func main() {
 	presenceRepo := repository.NewPresenceRepository(pool)
 	photoRepo := repository.NewPhotoRepository(pool)
 	authSvc := services.NewAuthService(userRepo)
-	seedSvc := services.NewSeedService(userRepo, profileRepo)
+	seedSvc := services.NewSeedService(userRepo, profileRepo, photoRepo)
 	mailer := services.NewMailer(
 		config.SMTPHost(),
 		config.SMTPPort(),
