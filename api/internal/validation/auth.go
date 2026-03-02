@@ -19,6 +19,27 @@ const (
 // username: буквы, цифры, underscore
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
+var commonPasswords = map[string]struct{}{
+	"password":  {},
+	"password1": {},
+	"123456":    {},
+	"12345678":  {},
+	"123456789": {},
+	"qwerty":    {},
+	"qwerty123": {},
+	"abc123":    {},
+	"111111":    {},
+	"000000":    {},
+	"admin":     {},
+	"letmein":   {},
+	"welcome":   {},
+	"iloveyou":  {},
+	"monkey":    {},
+	"dragon":    {},
+	"football":  {},
+	"baseball":  {},
+}
+
 func ValidateUsername(s string) error {
 	s = strings.TrimSpace(s)
 	if len(s) < MinUsernameLen {
@@ -47,6 +68,10 @@ func ValidatePassword(s string) error {
 	}
 	if len(s) > MaxPasswordLen {
 		return fmt.Errorf("password: max %d characters", MaxPasswordLen)
+	}
+	normalized := strings.ToLower(strings.TrimSpace(s))
+	if _, isCommon := commonPasswords[normalized]; isCommon {
+		return fmt.Errorf("password: too common, choose a stronger password")
 	}
 	return nil
 }

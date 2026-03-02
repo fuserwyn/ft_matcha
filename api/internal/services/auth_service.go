@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"matcha/api/internal/repository"
+	"matcha/api/internal/validation"
 )
 
 var ErrInvalidPassword = errors.New("invalid password")
@@ -28,8 +29,8 @@ type AuthService struct {
 const passwordResetTTL = 30 * time.Minute
 
 func (s *AuthService) Register(ctx context.Context, username, email, password, firstName, lastName string) (*repository.User, error) {
-	if len(password) < 8 {
-		return nil, errors.New("password min 8 chars")
+	if err := validation.ValidatePassword(password); err != nil {
+		return nil, err
 	}
 
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -97,8 +98,8 @@ func (s *AuthService) RequestPasswordReset(ctx context.Context, email string) (s
 }
 
 func (s *AuthService) ResetPassword(ctx context.Context, resetToken, newPassword string) error {
-	if len(newPassword) < 8 {
-		return errors.New("password min 8 chars")
+	if err := validation.ValidatePassword(newPassword); err != nil {
+		return err
 	}
 
 	tokenHash := hashToken(resetToken)
