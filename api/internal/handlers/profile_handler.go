@@ -276,6 +276,9 @@ func (h *ProfileHandler) GetViewedHistory(c *gin.Context) {
 		if history[i].City != nil {
 			resp[i]["city"] = *history[i].City
 		}
+		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), history[i].UserID); err == nil && p != nil {
+			resp[i]["primary_photo_url"] = p.URL
+		}
 	}
 	c.JSON(http.StatusOK, resp)
 }

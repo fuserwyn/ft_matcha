@@ -14,7 +14,6 @@ rebuild:
 run:
 	$(COMPOSE) down --remove-orphans --timeout 10
 	BUILDX_NO_DEFAULT_ATTESTATIONS=1 $(COMPOSE) build --no-cache api
-	BUILDX_NO_DEFAULT_ATTESTATIONS=1 $(COMPOSE) build --no-cache worker
 	BUILDX_NO_DEFAULT_ATTESTATIONS=1 $(COMPOSE) build --no-cache frontend
 	$(COMPOSE) up -d --force-recreate
 

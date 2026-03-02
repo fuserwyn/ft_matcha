@@ -10,6 +10,7 @@ import Profile from './pages/Profile'
 import Discovery from './pages/Discovery'
 import UserProfile from './pages/UserProfile'
 import Matches from './pages/Matches'
+import Views from './pages/Views'
 import Notifications from './pages/Notifications'
 import Chat from './pages/Chat'
 
@@ -52,6 +53,14 @@ export default function App() {
                 element={
                   <ProtectedRoute>
                     <Matches />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/views"
+                element={
+                  <ProtectedRoute>
+                    <Views />
                   </ProtectedRoute>
                 }
               />

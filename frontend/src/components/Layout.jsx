@@ -28,6 +28,9 @@ export function Layout({ children }) {
                 <Link to="/matches" className="text-slate-600 hover:text-rose-600 transition">
                   Matches
                 </Link>
+                <Link to="/views" className="text-slate-600 hover:text-rose-600 transition">
+                  Views
+                </Link>
                 <Link to="/notifications" className="text-slate-600 hover:text-rose-600 transition relative">
                   Notifications
                   {unreadCount > 0 && (

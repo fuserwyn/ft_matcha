@@ -8,8 +8,7 @@ A dating web application that facilitates connections between users—from regis
 |-------|--------------|
 | **Frontend** | React, Vite, Tailwind CSS, React Router |
 | **Backend** | Go, Gin |
-| **Worker** | Go |
-| **Databases** | PostgreSQL, Neo4j |
+| **Database** | PostgreSQL |
 | **Search** | Elasticsearch |
 | **Cache** | Redis |
 | **File Storage** | MinIO |
@@ -23,23 +22,23 @@ A dating web application that facilitates connections between users—from regis
 │                              Docker Compose                                              │
 ├──────────────────────────────────────────────────────────────────────────────────────────┤
 │                                                                                          │
-│  ┌─────────────────┐   ┌──────────────────┐   ┌─────────────────┐                        │
-│  │   Frontend      │   │   API (Go)       │   │   Worker (Go)   │                        │
-│  │   React         │   │   :8080          │   │   background    │                        │
-│  │   :3000         │──►│                  │   │                 │                        │
-│  │                 │   │  • Auth          │   │  • Sync → ES    │                        │
-│  │  Vite + React   │   │  • Profile       │   │  • Sync → Neo4j │                        │
-│  │  Tailwind       │   │  • Search        │   │  • Email        │                        │
-│  │  React Router   │   │  • Neo4j client  │   │  • Fame rating  │                        │
-│  │  WebSocket      │   │  • WebSocket     │   │                 │                        │
-│  └─────────────────┘   └────────┬─────────┘   └────────┬────────┘                        │
-│                                 │                      │                                 │
-│                   ┌─────────────┼──────────────────────┼─────────────────────────────┐  │
-│                   ▼             ▼                      ▼           ▼         ▼       │
-│             ┌──────────┐  ┌────────┐  ┌────────┐  ┌─────────┐  ┌───────┐  ┌──────┐     │
-│             │PostgreSQL│  │ Neo4j  │  │ Redis  │  │Elastic   │  │MailHog│  │MinIO │     │
-│             │  :5432   │  │ :7687  │  │ :6379  │  │ :9200    │  │ :1025 │  │:9000 │     │
-│             └──────────┘  └────────┘  └────────┘  └─────────┘  └───────┘  └──────┘     │
+│  ┌─────────────────┐   ┌──────────────────┐                                                │
+│  │   Frontend      │   │   API (Go)       │                                                │
+│  │   React         │   │   :8080          │                                                │
+│  │   :3000         │──►│                  │                                                │
+│  │                 │   │  • Auth          │                                                │
+│  │  Vite + React   │   │  • Profile       │                                                │
+│  │  Tailwind       │   │  • Search        │                                                │
+│  │  React Router   │   │  • WebSocket     │                                                │
+│  │  WebSocket      │   │                  │                                                │
+│  └─────────────────┘   └────────┬────────┘                                                │
+│                                 │                                                          │
+│                   ┌─────────────┴─────────────────────────────────────────────────────┐  │
+│                   ▼             ▼              ▼           ▼         ▼                  │
+│             ┌──────────┐  ┌────────┐  ┌─────────────┐  ┌───────┐  ┌──────┐              │
+│             │PostgreSQL│  │ Redis  │  │Elasticsearch│  │MailHog│  │MinIO │              │
+│             │  :5432   │  │ :6379  │  │   :9200     │  │ :1025 │  │:9000 │              │
+│             └──────────┘  └────────┘  └─────────────┘  └───────┘  └──────┘              │
 │                                                                                          │
 └─────────────────────────────────────────────────────────────────────────────────────────┘
 
@@ -52,9 +51,7 @@ A dating web application that facilitates connections between users—from regis
 |---------|------|---------|
 | **Frontend** | 3000 | React SPA, UI, WebSocket client |
 | **API** | 8080 | REST API, WebSocket server |
-| **Worker** | — | Sync, email, background jobs |
-| **PostgreSQL** | 5432 | Profiles, auth, chat |
-| **Neo4j** | 7474, 7687 | Graph (likes, views, blocks) |
+| **PostgreSQL** | 5432 | Profiles, auth, chat, likes, blocks |
 | **Redis** | 6379 | Sessions, pub/sub |
 | **Elasticsearch** | 9200 | Search, geo, recommendations |
 | **MailHog** | 8025, 1025 | SMTP for development |
@@ -62,16 +59,14 @@ A dating web application that facilitates connections between users—from regis
 
 ## Data Flow
 
-| Data | PostgreSQL | Neo4j | Elasticsearch |
-|------|------------|-------|---------------|
-| Users, profiles   | ✓ | id (sync) | indexed |
-| Likes | - | ✓ | — |
-| Views | — | ✓ | — |
-| Blocks | — | ✓ | — |
-| Tags | ✓ | HAS_TAG | ✓ |
-| Chat | ✓ | — | — |
-| Search / filters | — | — | ✓ |
-| Recommendations | details | graph (ids) | geo + filters |
+| Data | PostgreSQL | Elasticsearch |
+|------|------------|---------------|
+| Users, profiles   | ✓ | indexed |
+| Likes, blocks, views | ✓ | — |
+| Tags | ✓ | ✓ |
+| Chat | ✓ | — |
+| Search / filters | — | ✓ |
+| Recommendations | details | geo + filters |
 
 ## Project Structure
 
@@ -87,11 +82,6 @@ matcha/
 │   │   ├── repository/
 │   │   ├── middleware/
 │   │   └── websocket/
-│   ├── go.mod
-│   └── Dockerfile
-├── worker/                  # Go Worker
-│   ├── cmd/
-│   ├── internal/
 │   ├── go.mod
 │   └── Dockerfile
 ├── frontend/                # React
@@ -140,9 +130,8 @@ React is a **JavaScript library** for building user interfaces. When we say "wri
 2. Start the stack: `make up` (or `docker compose up -d`).
 3. Open http://localhost:3000 for the frontend.
 4. API runs at http://localhost:8080.
-5. Neo4j Browser is available at http://localhost:7474.
-6. MailHog UI is available at http://localhost:8025.
-7. MinIO console is available at http://localhost:9001.
+5. MailHog UI is available at http://localhost:8025.
+6. MinIO console is available at http://localhost:9001.
 
 ## Useful Commands
 
