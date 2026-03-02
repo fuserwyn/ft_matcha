@@ -466,7 +466,7 @@ export default function Profile() {
               placeholder="-180 to 180"
             />
           </div>
-          <div className="col-span-2">
+          <div className="col-span-2 flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={handleUseMyLocation}
@@ -474,6 +474,11 @@ export default function Profile() {
             >
               Use my current GPS location
             </button>
+            {data.latitude && data.longitude && !isNaN(parseFloat(data.latitude)) && !isNaN(parseFloat(data.longitude)) && (
+              <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                ✓ Location set ({parseFloat(data.latitude).toFixed(2)}, {parseFloat(data.longitude).toFixed(2)})
+              </span>
+            )}
           </div>
         </div>
         <button
