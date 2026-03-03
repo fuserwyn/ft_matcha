@@ -138,11 +138,12 @@ func main() {
 		config.FrontendBaseURL(),
 	)
 	wsHub := ws.NewHub()
-	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, syncSvc, minioStore)
-	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, likeRepo, blockRepo, notificationRepo, discoveryRepo, syncSvc, wsHub, minioStore)
-	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, photoRepo, blockRepo, notificationRepo, mailer, syncSvc, wsHub, minioStore)
+	apiBaseURL := config.PublicAPIBaseURL()
+	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, syncSvc, minioStore, apiBaseURL)
+	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, likeRepo, blockRepo, notificationRepo, discoveryRepo, syncSvc, wsHub, minioStore, apiBaseURL)
+	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, photoRepo, blockRepo, notificationRepo, mailer, syncSvc, wsHub, minioStore, apiBaseURL)
 	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, blockRepo, notificationRepo, mailer, wsHub)
-	photoH := handlers.NewPhotoHandler(photoRepo, minioStore)
+	photoH := handlers.NewPhotoHandler(photoRepo, minioStore, apiBaseURL)
 	notificationsH := handlers.NewNotificationsHandler(notificationRepo)
 	reportsH := handlers.NewReportsHandler(reportRepo, userRepo)
 	blocksH := handlers.NewBlocksHandler(blockRepo, userRepo)
@@ -183,6 +184,7 @@ func main() {
 
 	api := r.Group("/api/v1")
 	{
+		api.GET("/photos/serve/:id", photoH.ServePhoto)
 		api.POST("/auth/register", authH.Register)
 		api.POST("/auth/login", authH.Login)
 		api.GET("/auth/verify-email", authH.VerifyEmail)

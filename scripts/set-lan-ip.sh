@@ -29,12 +29,12 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 # Update or add LAN variables
-for var in MINIO_PUBLIC_BASE_URL MINIO_PUBLIC_URL VITE_API_URL CORS_ORIGIN; do
+for var in MINIO_PUBLIC_BASE_URL MINIO_PUBLIC_URL VITE_API_URL CORS_ORIGIN PUBLIC_API_BASE_URL; do
   case "$var" in
     MINIO_PUBLIC_BASE_URL|MINIO_PUBLIC_URL)
       value="http://${IP}:9000"
       ;;
-    VITE_API_URL)
+    VITE_API_URL|PUBLIC_API_BASE_URL)
       value="http://${IP}:8080"
       ;;
     CORS_ORIGIN)

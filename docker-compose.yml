@@ -19,6 +19,7 @@ services:
       - SMTP_COOLDOWN_SECONDS=${SMTP_COOLDOWN_SECONDS:-30}
       - JWT_SECRET=${JWT_SECRET:-change_me_in_production}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:3000}
+      - PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-http://localhost:8080}
     depends_on:
       postgres:
         condition: service_healthy

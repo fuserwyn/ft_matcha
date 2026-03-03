@@ -24,6 +24,7 @@ type LikesHandler struct {
 	syncSvc          *services.SyncService
 	hub              *ws.Hub
 	photoStore       *storage.MinIO
+	apiBaseURL       string
 }
 
 func NewLikesHandler(
@@ -37,6 +38,7 @@ func NewLikesHandler(
 	syncSvc *services.SyncService,
 	hub *ws.Hub,
 	photoStore *storage.MinIO,
+	apiBaseURL string,
 ) *LikesHandler {
 	return &LikesHandler{
 		likeRepo:         likeRepo,
@@ -49,6 +51,7 @@ func NewLikesHandler(
 		syncSvc:          syncSvc,
 		hub:              hub,
 		photoStore:       photoStore,
+		apiBaseURL:       apiBaseURL,
 	}
 }
 
@@ -251,7 +254,7 @@ func (h *LikesHandler) GetMatches(c *gin.Context) {
 	for i, card := range cards {
 		item := toUserCardResp(&cards[i])
 		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
-			item["primary_photo_url"] = h.photoStore.ObjectURL(p.ObjectKey)
+			item["primary_photo_url"] = h.apiBaseURL + "/api/v1/photos/serve/" + p.ID.String()
 		}
 		result[i] = item
 	}

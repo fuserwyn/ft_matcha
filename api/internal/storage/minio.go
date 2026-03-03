@@ -69,6 +69,11 @@ func (m *MinIO) RemoveObject(ctx context.Context, objectKey string) error {
 	return m.client.RemoveObject(ctx, m.bucket, objectKey, minio.RemoveObjectOptions{})
 }
 
+// GetObject returns a reader for the object. Caller must close it.
+func (m *MinIO) GetObject(ctx context.Context, objectKey string) (*minio.Object, error) {
+	return m.client.GetObject(ctx, m.bucket, objectKey, minio.GetObjectOptions{})
+}
+
 func (m *MinIO) ObjectURL(objectKey string) string {
 	if m.publicBaseURL != "" {
 		base, err := url.Parse(m.publicBaseURL)

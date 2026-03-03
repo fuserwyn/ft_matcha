@@ -21,10 +21,11 @@ type ProfileHandler struct {
 	photoRepo   *repository.PhotoRepository
 	syncSvc     *services.SyncService
 	photoStore  *storage.MinIO
+	apiBaseURL  string
 }
 
-func NewProfileHandler(profileRepo *repository.ProfileRepository, photoRepo *repository.PhotoRepository, syncSvc *services.SyncService, photoStore *storage.MinIO) *ProfileHandler {
-	return &ProfileHandler{profileRepo: profileRepo, photoRepo: photoRepo, syncSvc: syncSvc, photoStore: photoStore}
+func NewProfileHandler(profileRepo *repository.ProfileRepository, photoRepo *repository.PhotoRepository, syncSvc *services.SyncService, photoStore *storage.MinIO, apiBaseURL string) *ProfileHandler {
+	return &ProfileHandler{profileRepo: profileRepo, photoRepo: photoRepo, syncSvc: syncSvc, photoStore: photoStore, apiBaseURL: strings.TrimRight(apiBaseURL, "/")}
 }
 
 type UpdateProfileReq struct {
@@ -279,7 +280,7 @@ func (h *ProfileHandler) GetViewedHistory(c *gin.Context) {
 			resp[i]["city"] = *history[i].City
 		}
 		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), history[i].UserID); err == nil && p != nil {
-			resp[i]["primary_photo_url"] = h.photoStore.ObjectURL(p.ObjectKey)
+			resp[i]["primary_photo_url"] = h.apiBaseURL + "/api/v1/photos/serve/" + p.ID.String()
 		}
 	}
 	c.JSON(http.StatusOK, resp)
@@ -336,14 +337,15 @@ func toProfileResp(p *repository.Profile) gin.H {
 func (h *ProfileHandler) attachPhotos(resp gin.H, photos []repository.Photo) {
 	photoResp := make([]gin.H, len(photos))
 	for i := range photos {
+		url := h.apiBaseURL + "/api/v1/photos/serve/" + photos[i].ID.String()
 		photoResp[i] = gin.H{
 			"id":         photos[i].ID,
-			"url":        h.photoStore.ObjectURL(photos[i].ObjectKey),
+			"url":        url,
 			"is_primary": photos[i].IsPrimary,
 			"position":   photos[i].Position,
 		}
 		if photos[i].IsPrimary {
-			resp["primary_photo_url"] = h.photoStore.ObjectURL(photos[i].ObjectKey)
+			resp["primary_photo_url"] = url
 		}
 	}
 	resp["photos"] = photoResp

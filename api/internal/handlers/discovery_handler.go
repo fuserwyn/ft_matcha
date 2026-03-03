@@ -25,6 +25,7 @@ type DiscoveryHandler struct {
 	syncSvc       *services.SyncService
 	hub           *ws.Hub
 	photoStore    *storage.MinIO
+	apiBaseURL    string
 }
 
 func NewDiscoveryHandler(
@@ -38,6 +39,7 @@ func NewDiscoveryHandler(
 	syncSvc *services.SyncService,
 	hub *ws.Hub,
 	photoStore *storage.MinIO,
+	apiBaseURL string,
 ) *DiscoveryHandler {
 	return &DiscoveryHandler{
 		userRepo:      userRepo,
@@ -50,6 +52,7 @@ func NewDiscoveryHandler(
 		syncSvc:       syncSvc,
 		hub:           hub,
 		photoStore:    photoStore,
+		apiBaseURL:    strings.TrimRight(apiBaseURL, "/"),
 	}
 }
 
@@ -171,7 +174,7 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 	for i, card := range cards {
 		item := toUserCardResp(&card)
 		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
-			item["primary_photo_url"] = h.photoStore.ObjectURL(p.ObjectKey)
+			item["primary_photo_url"] = h.apiBaseURL + "/api/v1/photos/serve/" + p.ID.String()
 		}
 		result[i] = item
 	}
@@ -244,14 +247,15 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 	if len(photos) > 0 {
 		photoResp := make([]gin.H, len(photos))
 		for i := range photos {
+			url := h.apiBaseURL + "/api/v1/photos/serve/" + photos[i].ID.String()
 			photoResp[i] = gin.H{
 				"id":         photos[i].ID,
-				"url":        h.photoStore.ObjectURL(photos[i].ObjectKey),
+				"url":        url,
 				"is_primary": photos[i].IsPrimary,
 				"position":   photos[i].Position,
 			}
 			if photos[i].IsPrimary {
-				resp["primary_photo_url"] = h.photoStore.ObjectURL(photos[i].ObjectKey)
+				resp["primary_photo_url"] = url
 			}
 		}
 		resp["photos"] = photoResp

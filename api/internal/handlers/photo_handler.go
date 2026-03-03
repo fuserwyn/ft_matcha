@@ -30,12 +30,13 @@ var allowedPhotoExtensions = map[string]bool{
 }
 
 type PhotoHandler struct {
-	photos *repository.PhotoRepository
-	store  *storage.MinIO
+	photos     *repository.PhotoRepository
+	store      *storage.MinIO
+	apiBaseURL string
 }
 
-func NewPhotoHandler(photos *repository.PhotoRepository, store *storage.MinIO) *PhotoHandler {
-	return &PhotoHandler{photos: photos, store: store}
+func NewPhotoHandler(photos *repository.PhotoRepository, store *storage.MinIO, apiBaseURL string) *PhotoHandler {
+	return &PhotoHandler{photos: photos, store: store, apiBaseURL: strings.TrimRight(apiBaseURL, "/")}
 }
 
 // UploadMe godoc
@@ -234,8 +235,8 @@ func (h *PhotoHandler) SetPrimaryMe(c *gin.Context) {
 }
 
 func (h *PhotoHandler) photoResp(p *repository.Photo) gin.H {
-	// Use current MinIO public URL so photos work when MINIO_PUBLIC_BASE_URL changes (e.g. LAN IP for mobile)
-	url := h.store.ObjectURL(p.ObjectKey)
+	// Use API proxy URL so photos work regardless of MinIO reachability (CORS, referrer, etc.)
+	url := h.apiBaseURL + "/api/v1/photos/serve/" + p.ID.String()
 	return gin.H{
 		"id":         p.ID,
 		"user_id":    p.UserID,
@@ -244,4 +245,39 @@ func (h *PhotoHandler) photoResp(p *repository.Photo) gin.H {
 		"position":   p.Position,
 		"created_at": p.CreatedAt,
 	}
+}
+
+// ServePhoto godoc
+// @Summary	Serve photo by ID (public, no auth)
+// @Tags		photos
+// @Produce	image/*
+// @Param		id	path		string	true	"Photo ID"
+// @Success	200	{file}	binary
+// @Failure	404	{object}	map[string]string
+// @Router		/api/v1/photos/serve/{id} [get]
+func (h *PhotoHandler) ServePhoto(c *gin.Context) {
+	photoID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	p, err := h.photos.GetByID(c.Request.Context(), photoID)
+	if err != nil || p == nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	obj, err := h.store.GetObject(c.Request.Context(), p.ObjectKey)
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	defer obj.Close()
+	info, err := obj.Stat()
+	if err != nil {
+		c.Status(http.StatusNotFound)
+		return
+	}
+	c.Header("Content-Type", info.ContentType)
+	c.Header("Cache-Control", "public, max-age=86400")
+	io.Copy(c.Writer, obj)
 }
