@@ -331,7 +331,18 @@ export default function Profile() {
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {photoList.map((p) => (
               <div key={p.id} className="border border-slate-200 rounded-lg p-2">
-                <img src={p.url} alt="User upload" className="w-full h-28 object-cover rounded" referrerPolicy="no-referrer" />
+                <div className="w-full h-28 bg-slate-100 rounded overflow-hidden">
+                  <img
+                    src={p.url}
+                    alt="User upload"
+                    className="w-full h-28 object-cover"
+                    referrerPolicy="no-referrer"
+                    onError={(e) => { e.target.style.display = 'none'; e.target.nextElementSibling?.classList.remove('hidden'); }}
+                  />
+                  <div className="hidden w-full h-28 flex items-center justify-center text-slate-400 text-xs">
+                    Photo
+                  </div>
+                </div>
                 <div className="mt-2 flex gap-2">
                   {!p.is_primary && (
                     <button
