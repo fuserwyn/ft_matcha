@@ -35,6 +35,7 @@ export const profile = {
   getTags: () => api('/api/v1/profile/me/tags'),
   updateTags: (tags) => api('/api/v1/profile/me/tags', { method: 'PUT', body: JSON.stringify({ tags }) }),
   tagSuggestions: () => api('/api/v1/profile/tags/suggestions'),
+  citySuggestions: (q) => api(`/api/v1/profile/cities/suggestions${q ? '?q=' + encodeURIComponent(q) : ''}`),
   getViewedHistory: (params = {}) => {
     const q = new URLSearchParams(params).toString()
     return api(`/api/v1/profile/me/views${q ? '?' + q : ''}`)

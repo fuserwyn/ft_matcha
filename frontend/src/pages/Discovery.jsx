@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { users } from '../api/client'
+import { users, profile } from '../api/client'
 
 const GENDERS = ['male', 'female', 'non-binary', 'other']
 const INTERESTS = ['male', 'female', 'both', 'other']
@@ -9,6 +9,7 @@ export default function Discovery() {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [citySuggestions, setCitySuggestions] = useState([])
   const [filters, setFilters] = useState({
     gender: '',
     interest: '',
@@ -51,6 +52,18 @@ export default function Discovery() {
       setLoading(false)
     }
   }
+
+  useEffect(() => {
+    const q = filters.city.trim()
+    if (q.length < 2) {
+      setCitySuggestions([])
+      return
+    }
+    const t = setTimeout(() => {
+      profile.citySuggestions(q).then((r) => setCitySuggestions(r.cities || [])).catch(() => setCitySuggestions([]))
+    }, 200)
+    return () => clearTimeout(t)
+  }, [filters.city])
 
   useEffect(() => {
     load()
@@ -180,9 +193,16 @@ export default function Discovery() {
               name="city"
               value={filters.city}
               onChange={handleFilterChange}
-              placeholder="Paris"
+              placeholder="Par, Amster, Paris..."
+              list="city-suggestions"
+              autoComplete="off"
               className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
             />
+            <datalist id="city-suggestions">
+              {citySuggestions.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Tags (comma)</label>

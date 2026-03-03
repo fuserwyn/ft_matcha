@@ -303,6 +303,25 @@ func (h *ProfileHandler) TagSuggestions(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"tags": tags})
 }
 
+// CitySuggestions godoc
+// @Summary	Get city suggestions (partial match, e.g. "Par" -> Paris)
+// @Tags		profile
+// @Security	BearerAuth
+// @Produce	json
+// @Param		q	query		string	false	"City prefix"
+// @Success	200	{object}	map[string]interface{}
+// @Failure	500	{object}	map[string]string
+// @Router		/api/v1/profile/cities/suggestions [get]
+func (h *ProfileHandler) CitySuggestions(c *gin.Context) {
+	q := strings.TrimSpace(c.Query("q"))
+	cities, err := h.profileRepo.SearchCities(c.Request.Context(), q, 10)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"cities": cities})
+}
+
 func toProfileResp(p *repository.Profile) gin.H {
 	resp := gin.H{
 		"user_id":     p.UserID,

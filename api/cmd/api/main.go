@@ -201,6 +201,7 @@ func main() {
 			profile.GET("/me/tags", profileH.GetMyTags)
 			profile.PUT("/me/tags", profileH.UpdateMyTags)
 			profile.GET("/tags/suggestions", profileH.TagSuggestions)
+			profile.GET("/cities/suggestions", profileH.CitySuggestions)
 			profile.GET("/me/views", profileH.GetViewedHistory)
 		}
 
