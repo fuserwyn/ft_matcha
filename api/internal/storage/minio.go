@@ -90,17 +90,9 @@ func (m *MinIO) ObjectURL(objectKey string) string {
 }
 
 func (m *MinIO) ensurePublicReadPolicy(ctx context.Context) error {
-	policy := fmt.Sprintf(`{
-		"Version": "2012-10-17",
-		"Statement": [
-			{
-				"Effect": "Allow",
-				"Principal": {"AWS": ["*"]},
-				"Action": ["s3:GetObject"],
-				"Resource": ["arn:aws:s3:::%s/*"]
-			}
-		]
-	}`, m.bucket)
+	// Public read policy: anonymous GetObject on all objects in bucket.
+	// ListBucket on bucket helps some MinIO versions apply anonymous access correctly.
+	policy := fmt.Sprintf(`{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:GetObject"],"Resource":["arn:aws:s3:::%s/*"]},{"Effect":"Allow","Principal":{"AWS":["*"]},"Action":["s3:ListBucket"],"Resource":["arn:aws:s3:::%s"]}]}`, m.bucket, m.bucket)
 	return m.client.SetBucketPolicy(ctx, m.bucket, policy)
 }
 

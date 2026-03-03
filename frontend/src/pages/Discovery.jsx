@@ -261,6 +261,7 @@ export default function Discovery() {
                   src={u.primary_photo_url}
                   alt={displayName}
                   className="w-full h-40 sm:h-36 object-cover rounded-lg mb-3"
+                  referrerPolicy="no-referrer"
                 />
               ) : (
                 <div className="w-full h-40 sm:h-36 bg-slate-100 rounded-lg mb-3 flex items-center justify-center text-slate-400 text-sm">

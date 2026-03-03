@@ -10,6 +10,7 @@ import (
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
 	"matcha/api/internal/services"
+	"matcha/api/internal/storage"
 	ws "matcha/api/internal/websocket"
 )
 
@@ -23,6 +24,7 @@ type DiscoveryHandler struct {
 	discoveryRepo *repository.DiscoveryRepository
 	syncSvc       *services.SyncService
 	hub           *ws.Hub
+	photoStore    *storage.MinIO
 }
 
 func NewDiscoveryHandler(
@@ -35,6 +37,7 @@ func NewDiscoveryHandler(
 	discoveryRepo *repository.DiscoveryRepository,
 	syncSvc *services.SyncService,
 	hub *ws.Hub,
+	photoStore *storage.MinIO,
 ) *DiscoveryHandler {
 	return &DiscoveryHandler{
 		userRepo:      userRepo,
@@ -46,6 +49,7 @@ func NewDiscoveryHandler(
 		discoveryRepo: discoveryRepo,
 		syncSvc:       syncSvc,
 		hub:           hub,
+		photoStore:    photoStore,
 	}
 }
 
@@ -167,7 +171,7 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 	for i, card := range cards {
 		item := toUserCardResp(&card)
 		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
-			item["primary_photo_url"] = p.URL
+			item["primary_photo_url"] = h.photoStore.ObjectURL(p.ObjectKey)
 		}
 		result[i] = item
 	}
@@ -242,12 +246,12 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 		for i := range photos {
 			photoResp[i] = gin.H{
 				"id":         photos[i].ID,
-				"url":        photos[i].URL,
+				"url":        h.photoStore.ObjectURL(photos[i].ObjectKey),
 				"is_primary": photos[i].IsPrimary,
 				"position":   photos[i].Position,
 			}
 			if photos[i].IsPrimary {
-				resp["primary_photo_url"] = photos[i].URL
+				resp["primary_photo_url"] = h.photoStore.ObjectURL(photos[i].ObjectKey)
 			}
 		}
 		resp["photos"] = photoResp

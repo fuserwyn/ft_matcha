@@ -9,6 +9,7 @@ import (
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
 	"matcha/api/internal/services"
+	"matcha/api/internal/storage"
 	ws "matcha/api/internal/websocket"
 )
 
@@ -22,6 +23,7 @@ type LikesHandler struct {
 	mailer           *services.Mailer
 	syncSvc          *services.SyncService
 	hub              *ws.Hub
+	photoStore       *storage.MinIO
 }
 
 func NewLikesHandler(
@@ -34,6 +36,7 @@ func NewLikesHandler(
 	mailer *services.Mailer,
 	syncSvc *services.SyncService,
 	hub *ws.Hub,
+	photoStore *storage.MinIO,
 ) *LikesHandler {
 	return &LikesHandler{
 		likeRepo:         likeRepo,
@@ -45,6 +48,7 @@ func NewLikesHandler(
 		mailer:           mailer,
 		syncSvc:          syncSvc,
 		hub:              hub,
+		photoStore:       photoStore,
 	}
 }
 
@@ -247,7 +251,7 @@ func (h *LikesHandler) GetMatches(c *gin.Context) {
 	for i, card := range cards {
 		item := toUserCardResp(&cards[i])
 		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
-			item["primary_photo_url"] = p.URL
+			item["primary_photo_url"] = h.photoStore.ObjectURL(p.ObjectKey)
 		}
 		result[i] = item
 	}

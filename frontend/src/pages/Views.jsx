@@ -53,6 +53,7 @@ export default function Views() {
                     src={u.primary_photo_url}
                     alt={`${u.first_name} ${u.last_name}`}
                     className="w-14 h-14 object-cover rounded-full shrink-0"
+                    referrerPolicy="no-referrer"
                   />
                 ) : (
                   <div className="w-14 h-14 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-slate-500 text-lg font-medium">

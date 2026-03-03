@@ -150,6 +150,7 @@ export default function UserProfile() {
                 src={p.url}
                 alt={`${user.first_name} ${user.last_name}`}
                 className={`w-full h-36 object-cover rounded ${p.is_primary ? 'ring-2 ring-rose-400' : ''}`}
+                referrerPolicy="no-referrer"
               />
             ))}
           </div>

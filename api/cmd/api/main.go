@@ -138,9 +138,9 @@ func main() {
 		config.FrontendBaseURL(),
 	)
 	wsHub := ws.NewHub()
-	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, syncSvc)
-	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, likeRepo, blockRepo, notificationRepo, discoveryRepo, syncSvc, wsHub)
-	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, photoRepo, blockRepo, notificationRepo, mailer, syncSvc, wsHub)
+	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, syncSvc, minioStore)
+	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, likeRepo, blockRepo, notificationRepo, discoveryRepo, syncSvc, wsHub, minioStore)
+	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, photoRepo, blockRepo, notificationRepo, mailer, syncSvc, wsHub, minioStore)
 	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, blockRepo, notificationRepo, mailer, wsHub)
 	photoH := handlers.NewPhotoHandler(photoRepo, minioStore)
 	notificationsH := handlers.NewNotificationsHandler(notificationRepo)

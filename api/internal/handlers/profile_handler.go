@@ -12,6 +12,7 @@ import (
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
 	"matcha/api/internal/services"
+	"matcha/api/internal/storage"
 	"matcha/api/internal/validation"
 )
 
@@ -19,10 +20,11 @@ type ProfileHandler struct {
 	profileRepo *repository.ProfileRepository
 	photoRepo   *repository.PhotoRepository
 	syncSvc     *services.SyncService
+	photoStore  *storage.MinIO
 }
 
-func NewProfileHandler(profileRepo *repository.ProfileRepository, photoRepo *repository.PhotoRepository, syncSvc *services.SyncService) *ProfileHandler {
-	return &ProfileHandler{profileRepo: profileRepo, photoRepo: photoRepo, syncSvc: syncSvc}
+func NewProfileHandler(profileRepo *repository.ProfileRepository, photoRepo *repository.PhotoRepository, syncSvc *services.SyncService, photoStore *storage.MinIO) *ProfileHandler {
+	return &ProfileHandler{profileRepo: profileRepo, photoRepo: photoRepo, syncSvc: syncSvc, photoStore: photoStore}
 }
 
 type UpdateProfileReq struct {
@@ -61,7 +63,7 @@ func (h *ProfileHandler) GetMe(c *gin.Context) {
 		if tags, tagsErr := h.profileRepo.GetTags(c.Request.Context(), id); tagsErr == nil {
 			resp["tags"] = tags
 		}
-		attachPhotos(resp, photos)
+		h.attachPhotos(resp, photos)
 		c.JSON(http.StatusOK, resp)
 		return
 	}
@@ -69,7 +71,7 @@ func (h *ProfileHandler) GetMe(c *gin.Context) {
 	if tags, tagsErr := h.profileRepo.GetTags(c.Request.Context(), id); tagsErr == nil {
 		resp["tags"] = tags
 	}
-	attachPhotos(resp, photos)
+	h.attachPhotos(resp, photos)
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -277,7 +279,7 @@ func (h *ProfileHandler) GetViewedHistory(c *gin.Context) {
 			resp[i]["city"] = *history[i].City
 		}
 		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), history[i].UserID); err == nil && p != nil {
-			resp[i]["primary_photo_url"] = p.URL
+			resp[i]["primary_photo_url"] = h.photoStore.ObjectURL(p.ObjectKey)
 		}
 	}
 	c.JSON(http.StatusOK, resp)
@@ -331,17 +333,17 @@ func toProfileResp(p *repository.Profile) gin.H {
 	return resp
 }
 
-func attachPhotos(resp gin.H, photos []repository.Photo) {
+func (h *ProfileHandler) attachPhotos(resp gin.H, photos []repository.Photo) {
 	photoResp := make([]gin.H, len(photos))
 	for i := range photos {
 		photoResp[i] = gin.H{
 			"id":         photos[i].ID,
-			"url":        photos[i].URL,
+			"url":        h.photoStore.ObjectURL(photos[i].ObjectKey),
 			"is_primary": photos[i].IsPrimary,
 			"position":   photos[i].Position,
 		}
 		if photos[i].IsPrimary {
-			resp["primary_photo_url"] = photos[i].URL
+			resp["primary_photo_url"] = h.photoStore.ObjectURL(photos[i].ObjectKey)
 		}
 	}
 	resp["photos"] = photoResp

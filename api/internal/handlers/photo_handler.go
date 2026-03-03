@@ -111,7 +111,7 @@ func (h *PhotoHandler) UploadMe(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, photoResp(p))
+	c.JSON(http.StatusCreated, h.photoResp(p))
 }
 
 // ListMe godoc
@@ -132,7 +132,7 @@ func (h *PhotoHandler) ListMe(c *gin.Context) {
 	}
 	resp := make([]gin.H, len(items))
 	for i := range items {
-		resp[i] = photoResp(&items[i])
+		resp[i] = h.photoResp(&items[i])
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -158,7 +158,7 @@ func (h *PhotoHandler) ListByUser(c *gin.Context) {
 	}
 	resp := make([]gin.H, len(items))
 	for i := range items {
-		resp[i] = photoResp(&items[i])
+		resp[i] = h.photoResp(&items[i])
 	}
 	c.JSON(http.StatusOK, resp)
 }
@@ -233,11 +233,13 @@ func (h *PhotoHandler) SetPrimaryMe(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
-func photoResp(p *repository.Photo) gin.H {
+func (h *PhotoHandler) photoResp(p *repository.Photo) gin.H {
+	// Use current MinIO public URL so photos work when MINIO_PUBLIC_BASE_URL changes (e.g. LAN IP for mobile)
+	url := h.store.ObjectURL(p.ObjectKey)
 	return gin.H{
 		"id":         p.ID,
 		"user_id":    p.UserID,
-		"url":        p.URL,
+		"url":        url,
 		"is_primary": p.IsPrimary,
 		"position":   p.Position,
 		"created_at": p.CreatedAt,
