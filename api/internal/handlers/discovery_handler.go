@@ -174,7 +174,7 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 	for i, card := range cards {
 		item := toUserCardResp(&card)
 		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
-			item["primary_photo_url"] = h.apiBaseURL + "/api/v1/photos/serve/" + p.ID.String()
+			item["primary_photo_url"] = photoURL(p, h.apiBaseURL)
 		}
 		result[i] = item
 	}
@@ -247,7 +247,7 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 	if len(photos) > 0 {
 		photoResp := make([]gin.H, len(photos))
 		for i := range photos {
-			url := h.apiBaseURL + "/api/v1/photos/serve/" + photos[i].ID.String()
+			url := photoURL(&photos[i], h.apiBaseURL)
 			photoResp[i] = gin.H{
 				"id":         photos[i].ID,
 				"url":        url,

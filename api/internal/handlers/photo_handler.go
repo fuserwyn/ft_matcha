@@ -235,8 +235,7 @@ func (h *PhotoHandler) SetPrimaryMe(c *gin.Context) {
 }
 
 func (h *PhotoHandler) photoResp(p *repository.Photo) gin.H {
-	// Use API proxy URL so photos work regardless of MinIO reachability (CORS, referrer, etc.)
-	url := h.apiBaseURL + "/api/v1/photos/serve/" + p.ID.String()
+	url := photoURL(p, h.apiBaseURL)
 	return gin.H{
 		"id":         p.ID,
 		"user_id":    p.UserID,
@@ -280,4 +279,13 @@ func (h *PhotoHandler) ServePhoto(c *gin.Context) {
 	c.Header("Content-Type", info.ContentType)
 	c.Header("Cache-Control", "public, max-age=86400")
 	io.Copy(c.Writer, obj)
+}
+
+// photoURL returns the URL for a photo. Seed photos (objectKey starts with "seed/") use stored URL (picsum);
+// user-uploaded photos use the API serve endpoint.
+func photoURL(p *repository.Photo, apiBaseURL string) string {
+	if strings.HasPrefix(p.ObjectKey, "seed/") && p.URL != "" {
+		return p.URL
+	}
+	return strings.TrimRight(apiBaseURL, "/") + "/api/v1/photos/serve/" + p.ID.String()
 }

@@ -280,7 +280,7 @@ func (h *ProfileHandler) GetViewedHistory(c *gin.Context) {
 			resp[i]["city"] = *history[i].City
 		}
 		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), history[i].UserID); err == nil && p != nil {
-			resp[i]["primary_photo_url"] = h.apiBaseURL + "/api/v1/photos/serve/" + p.ID.String()
+			resp[i]["primary_photo_url"] = photoURL(p, h.apiBaseURL)
 		}
 	}
 	c.JSON(http.StatusOK, resp)
@@ -337,7 +337,7 @@ func toProfileResp(p *repository.Profile) gin.H {
 func (h *ProfileHandler) attachPhotos(resp gin.H, photos []repository.Photo) {
 	photoResp := make([]gin.H, len(photos))
 	for i := range photos {
-		url := h.apiBaseURL + "/api/v1/photos/serve/" + photos[i].ID.String()
+		url := photoURL(&photos[i], h.apiBaseURL)
 		photoResp[i] = gin.H{
 			"id":         photos[i].ID,
 			"url":        url,

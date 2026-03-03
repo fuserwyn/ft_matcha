@@ -27,6 +27,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true)
   const [savingAccount, setSavingAccount] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
   const [savingTags, setSavingTags] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [photoList, setPhotoList] = useState([])
@@ -113,6 +114,8 @@ export default function Profile() {
     try {
       await profile.update(payload)
       setMessage('Profile updated')
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2000)
     } catch (err) {
       setError(err.message || 'Update failed')
     } finally {
@@ -495,9 +498,11 @@ export default function Profile() {
         <button
           type="submit"
           disabled={saving}
-          className="w-full py-3 bg-rose-500 text-white font-medium rounded-lg hover:bg-rose-600 disabled:opacity-50 transition"
+          className={`w-full py-3 text-white font-medium rounded-lg transition ${
+            saved ? 'bg-emerald-500' : saving ? 'bg-rose-500 opacity-70' : 'bg-rose-500 hover:bg-rose-600'
+          } disabled:opacity-50`}
         >
-          {saving ? 'Saving...' : 'Save profile'}
+          {saving ? 'Saving...' : saved ? 'Saved!' : 'Save profile'}
         </button>
       </form>
     </div>

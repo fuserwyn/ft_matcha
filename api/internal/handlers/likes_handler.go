@@ -254,7 +254,7 @@ func (h *LikesHandler) GetMatches(c *gin.Context) {
 	for i, card := range cards {
 		item := toUserCardResp(&cards[i])
 		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
-			item["primary_photo_url"] = h.apiBaseURL + "/api/v1/photos/serve/" + p.ID.String()
+			item["primary_photo_url"] = photoURL(p, h.apiBaseURL)
 		}
 		result[i] = item
 	}
