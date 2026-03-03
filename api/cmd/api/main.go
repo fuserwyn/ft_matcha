@@ -139,7 +139,7 @@ func main() {
 	)
 	wsHub := ws.NewHub()
 	apiBaseURL := config.PublicAPIBaseURL()
-	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, syncSvc, minioStore, apiBaseURL)
+	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, discoveryRepo, syncSvc, minioStore, apiBaseURL)
 	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, likeRepo, blockRepo, notificationRepo, discoveryRepo, syncSvc, wsHub, minioStore, apiBaseURL)
 	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, photoRepo, blockRepo, notificationRepo, mailer, syncSvc, wsHub, minioStore, apiBaseURL)
 	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, blockRepo, notificationRepo, mailer, wsHub)

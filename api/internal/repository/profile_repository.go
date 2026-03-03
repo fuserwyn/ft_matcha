@@ -290,28 +290,3 @@ func (r *ProfileRepository) RecalculateFameRating(ctx context.Context, userID uu
 	}
 	return score, nil
 }
-
-func (r *ProfileRepository) SearchCities(ctx context.Context, prefix string, limit int) ([]string, error) {
-	if limit <= 0 {
-		limit = 10
-	}
-	rows, err := r.pool.Query(ctx, `
-		SELECT DISTINCT city FROM profiles
-		WHERE city IS NOT NULL AND city ILIKE $1 || '%'
-		ORDER BY city
-		LIMIT $2
-	`, prefix, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var cities []string
-	for rows.Next() {
-		var city string
-		if err := rows.Scan(&city); err != nil {
-			return nil, err
-		}
-		cities = append(cities, city)
-	}
-	return cities, rows.Err()
-}

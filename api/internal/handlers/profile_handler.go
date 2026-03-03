@@ -17,15 +17,16 @@ import (
 )
 
 type ProfileHandler struct {
-	profileRepo *repository.ProfileRepository
-	photoRepo   *repository.PhotoRepository
-	syncSvc     *services.SyncService
-	photoStore  *storage.MinIO
-	apiBaseURL  string
+	profileRepo   *repository.ProfileRepository
+	photoRepo     *repository.PhotoRepository
+	discoveryRepo *repository.DiscoveryRepository
+	syncSvc       *services.SyncService
+	photoStore    *storage.MinIO
+	apiBaseURL    string
 }
 
-func NewProfileHandler(profileRepo *repository.ProfileRepository, photoRepo *repository.PhotoRepository, syncSvc *services.SyncService, photoStore *storage.MinIO, apiBaseURL string) *ProfileHandler {
-	return &ProfileHandler{profileRepo: profileRepo, photoRepo: photoRepo, syncSvc: syncSvc, photoStore: photoStore, apiBaseURL: strings.TrimRight(apiBaseURL, "/")}
+func NewProfileHandler(profileRepo *repository.ProfileRepository, photoRepo *repository.PhotoRepository, discoveryRepo *repository.DiscoveryRepository, syncSvc *services.SyncService, photoStore *storage.MinIO, apiBaseURL string) *ProfileHandler {
+	return &ProfileHandler{profileRepo: profileRepo, photoRepo: photoRepo, discoveryRepo: discoveryRepo, syncSvc: syncSvc, photoStore: photoStore, apiBaseURL: strings.TrimRight(apiBaseURL, "/")}
 }
 
 type UpdateProfileReq struct {
@@ -314,7 +315,7 @@ func (h *ProfileHandler) TagSuggestions(c *gin.Context) {
 // @Router		/api/v1/profile/cities/suggestions [get]
 func (h *ProfileHandler) CitySuggestions(c *gin.Context) {
 	q := strings.TrimSpace(c.Query("q"))
-	cities, err := h.profileRepo.SearchCities(c.Request.Context(), q, 10)
+	cities, err := h.discoveryRepo.SearchCities(c.Request.Context(), q, 10)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

@@ -53,6 +53,10 @@ type DiscoveryRepository struct {
 	search *search.Client
 }
 
+func (r *DiscoveryRepository) SearchCities(ctx context.Context, prefix string, limit int) ([]string, error) {
+	return r.search.SearchCities(ctx, prefix, limit)
+}
+
 func (r *DiscoveryRepository) Search(ctx context.Context, f DiscoveryFilters) ([]UserCard, error) {
 	sf := search.SearchFilters{
 		ExcludeID:     f.ExcludeID,

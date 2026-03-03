@@ -137,6 +137,78 @@ func (c *Client) Index(ctx context.Context, doc *UserDoc) error {
 	return nil
 }
 
+func (c *Client) SearchCities(ctx context.Context, prefix string, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return nil, nil
+	}
+	query := map[string]interface{}{
+		"size": 0,
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{
+				"filter": []map[string]interface{}{
+					{
+						"prefix": map[string]interface{}{
+							"city": map[string]interface{}{
+								"value":            prefix,
+								"case_insensitive": true,
+							},
+						},
+					},
+					{"exists": map[string]interface{}{"field": "city"}},
+				},
+			},
+		},
+		"aggs": map[string]interface{}{
+			"cities": map[string]interface{}{
+				"terms": map[string]interface{}{
+					"field": "city",
+					"size":  limit,
+					"order": map[string]interface{}{"_key": "asc"},
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(query)
+	if err != nil {
+		return nil, err
+	}
+	req := esapi.SearchRequest{
+		Index: []string{IndexName},
+		Body:  bytes.NewReader(body),
+	}
+	res, err := req.Do(ctx, c.es)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.IsError() {
+		return nil, fmt.Errorf("search cities: %s", res.String())
+	}
+	var result struct {
+		Aggregations struct {
+			Cities struct {
+				Buckets []struct {
+					Key string `json:"key"`
+				} `json:"buckets"`
+			} `json:"cities"`
+		} `json:"aggregations"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	cities := make([]string, 0, len(result.Aggregations.Cities.Buckets))
+	for _, b := range result.Aggregations.Cities.Buckets {
+		if b.Key != "" {
+			cities = append(cities, b.Key)
+		}
+	}
+	return cities, nil
+}
+
 func (c *Client) Delete(ctx context.Context, userID string) error {
 	req := esapi.DeleteRequest{
 		Index:      IndexName,
