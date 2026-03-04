@@ -1,6 +1,6 @@
 COMPOSE=docker compose
 
-.PHONY: up down rebuild run logs api-logs ps e2e test dev dev-api dev-infra lan-ip
+.PHONY: up down rebuild run logs api-logs ps e2e test dev dev-api dev-infra lan-ip showdb sqli-test sqltest
 
 # Development: hot reload without rebuilding Docker
 dev-infra:
@@ -44,6 +44,17 @@ e2e:
 
 test:
 	cd api && go test ./...
+
+# Run SQL injection protection tests against the running API
+sqli-test: sqltest
+sqltest:
+	@chmod +x scripts/test_sqli.sh
+	@./scripts/test_sqli.sh
+
+# Show all DB tables with data in readable format
+showdb:
+	@chmod +x scripts/showdb.sh
+	@./scripts/showdb.sh
 
 # Detect local IP and update .env for mobile/LAN access
 lan-ip:
