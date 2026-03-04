@@ -4,7 +4,7 @@
 
 html {
   min-width: 280px;
-  overflow-x: hidden;
+  overflow-x: clip;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -13,7 +13,7 @@ body {
   color: #0f172a;
   font-family: 'DM Sans', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
-  overflow-x: hidden;
+  overflow-x: clip;
   min-width: 280px;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);

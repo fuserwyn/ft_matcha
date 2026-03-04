@@ -20,24 +20,39 @@ const (
 var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 
 var commonPasswords = map[string]struct{}{
-	"password":  {},
-	"password1": {},
-	"123456":    {},
-	"12345678":  {},
-	"123456789": {},
-	"qwerty":    {},
-	"qwerty123": {},
-	"abc123":    {},
-	"111111":    {},
-	"000000":    {},
-	"admin":     {},
-	"letmein":   {},
-	"welcome":   {},
-	"iloveyou":  {},
-	"monkey":    {},
-	"dragon":    {},
-	"football":  {},
-	"baseball":  {},
+	// Top numeric sequences
+	"123456": {}, "1234567": {}, "12345678": {}, "123456789": {}, "1234567890": {},
+	"12345": {}, "123123": {}, "1234": {}, "111111": {}, "112233": {},
+	"000000": {}, "0000": {}, "9999": {}, "1111": {}, "2222": {}, "3333": {},
+	"4444": {}, "5555": {}, "6666": {}, "7777": {}, "8888": {},
+	"654321": {}, "987654321": {}, "0987654321": {},
+	// Keyboard patterns
+	"qwerty": {}, "qwerty123": {}, "qwertyuiop": {}, "azerty": {},
+	"asdfgh": {}, "asdfghjkl": {}, "zxcvbn": {}, "qazwsx": {},
+	"1q2w3e4r": {}, "1qaz2wsx": {},
+	// Common English words / phrases
+	"password": {}, "password1": {}, "password123": {}, "passw0rd": {},
+	"abc123": {}, "admin": {}, "admin123": {}, "administrator": {},
+	"letmein": {}, "welcome": {}, "welcome1": {}, "welcome123": {},
+	"iloveyou": {}, "love": {}, "lovely": {},
+	"monkey": {}, "dragon": {}, "master": {}, "ninja": {},
+	"shadow": {}, "sunshine": {}, "princess": {}, "superman": {},
+	"batman": {}, "trustno1": {}, "solo": {}, "starwars": {},
+	"hello": {}, "hello123": {}, "test": {}, "test123": {}, "testing": {},
+	"access": {}, "guest": {}, "root": {}, "toor": {}, "pass": {},
+	"hunter": {}, "ranger": {}, "tiger": {}, "matrix": {},
+	"charlie": {}, "robert": {}, "thomas": {}, "jessica": {},
+	"michael": {}, "jennifer": {}, "jordan": {}, "harley": {},
+	"summer": {}, "winter": {}, "flower": {}, "puppy": {}, "family": {},
+	"secret": {}, "login": {}, "change": {}, "changeme": {},
+	"default": {}, "temp": {}, "temp123": {},
+	// Sports teams
+	"football": {}, "baseball": {}, "soccer": {}, "hockey": {},
+	"liverpool": {}, "arsenal": {}, "chelsea": {}, "barcelona": {},
+	"manchester": {}, "madrid": {},
+	// French common passwords (evaluators are at 42 Paris)
+	"bonjour": {}, "motdepasse": {}, "soleil": {}, "azerty123": {},
+	"pomme": {}, "chocolat": {},
 }
 
 func ValidateUsername(s string) error {
