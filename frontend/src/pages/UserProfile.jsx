@@ -16,6 +16,8 @@ export default function UserProfile() {
   const [liking, setLiking] = useState(false)
   const [blocking, setBlocking] = useState(false)
   const [blocked, setBlocked] = useState(false)
+  const [reporting, setReporting] = useState(false)
+  const [reportModal, setReportModal] = useState(false)
   const [hasPrimaryPhoto, setHasPrimaryPhoto] = useState(false)
   const [lightboxPhoto, setLightboxPhoto] = useState(null)
 
@@ -119,6 +121,21 @@ export default function UserProfile() {
       setError(err.message || 'Failed to unlike user')
     } finally {
       setLiking(false)
+    }
+  }
+
+  const onReport = async (reason, comment) => {
+    setReporting(true)
+    setInfo('')
+    setError('')
+    try {
+      await users.report(id, { reason, comment: comment || null })
+      setReportModal(false)
+      setInfo('Report submitted. Thank you.')
+    } catch (err) {
+      setError(err.message || 'Failed to report')
+    } finally {
+      setReporting(false)
     }
   }
 
@@ -286,7 +303,47 @@ export default function UserProfile() {
           >
             {blocking ? 'Updating...' : blocked ? 'Unblock' : 'Block'}
           </button>
+          <button
+            onClick={() => setReportModal(true)}
+            disabled={reporting}
+            className="px-4 py-2 rounded border border-amber-300 text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+          >
+            Report
+          </button>
         </div>
+        {reportModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setReportModal(false)}>
+            <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <h3 className="font-semibold text-slate-800 mb-3">Report profile</h3>
+              <p className="text-sm text-slate-600 mb-4">Report this profile as:</p>
+              <div className="flex flex-col gap-2">
+                {[
+                  { value: 'fake_account', label: 'Fake account' },
+                  { value: 'spam', label: 'Spam' },
+                  { value: 'harassment', label: 'Harassment' },
+                  { value: 'inappropriate', label: 'Inappropriate content' },
+                  { value: 'scam', label: 'Scam' },
+                  { value: 'other', label: 'Other' },
+                ].map((opt) => (
+                  <button
+                    key={opt.value}
+                    onClick={() => onReport(opt.value)}
+                    disabled={reporting}
+                    className="text-left px-4 py-2 rounded border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-60"
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setReportModal(false)}
+                className="mt-4 w-full py-2 text-slate-600 hover:text-slate-800"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
         {info && <p className="mt-3 text-emerald-600 text-sm">{info}</p>}
         {error && <p className="mt-3 text-rose-600 text-sm">{error}</p>}
       </div>

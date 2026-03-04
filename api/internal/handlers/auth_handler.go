@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -177,7 +178,11 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // @Router		/api/v1/auth/verify-email [get]
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	redirectTo := func(params string) {
-		url := h.frontendBaseURL + "/matches"
+		base := strings.TrimRight(strings.TrimSpace(h.frontendBaseURL), "/")
+		if base == "" || base == "about:blank" {
+			base = "http://localhost:3000"
+		}
+		url := base + "/matches"
 		if params != "" {
 			url += "?" + params
 		}

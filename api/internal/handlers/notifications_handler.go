@@ -12,10 +12,11 @@ import (
 
 type NotificationsHandler struct {
 	notifications *repository.NotificationRepository
+	blockRepo     *repository.BlockRepository
 }
 
-func NewNotificationsHandler(notifications *repository.NotificationRepository) *NotificationsHandler {
-	return &NotificationsHandler{notifications: notifications}
+func NewNotificationsHandler(notifications *repository.NotificationRepository, blockRepo *repository.BlockRepository) *NotificationsHandler {
+	return &NotificationsHandler{notifications: notifications, blockRepo: blockRepo}
 }
 
 // List godoc
@@ -34,7 +35,8 @@ func (h *NotificationsHandler) List(c *gin.Context) {
 	limit, offset := parseLimitOffset(c)
 	unreadOnly, _ := strconv.ParseBool(c.DefaultQuery("unread_only", "false"))
 
-	items, err := h.notifications.ListByUser(c.Request.Context(), id, unreadOnly, limit, offset)
+	blockedIDs, _ := h.blockRepo.ListBlockedIDs(c.Request.Context(), id)
+	items, err := h.notifications.ListByUser(c.Request.Context(), id, blockedIDs, unreadOnly, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

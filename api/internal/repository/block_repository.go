@@ -45,6 +45,18 @@ func (r *BlockRepository) IsBlockedEither(ctx context.Context, userA, userB uuid
 	return blocked, err
 }
 
+// BlockedBy returns true if blockerID has blocked blockedID (recipient blocked actor).
+func (r *BlockRepository) BlockedBy(ctx context.Context, blockerID, blockedID uuid.UUID) (bool, error) {
+	var blocked bool
+	err := r.pool.QueryRow(ctx, `
+		SELECT EXISTS(
+			SELECT 1 FROM user_blocks
+			WHERE blocker_user_id = $1 AND blocked_user_id = $2
+		)
+	`, blockerID, blockedID).Scan(&blocked)
+	return blocked, err
+}
+
 func (r *BlockRepository) ListBlockedIDs(ctx context.Context, userID uuid.UUID) ([]uuid.UUID, error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT blocked_user_id

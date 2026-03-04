@@ -117,26 +117,34 @@ func (h *LikesHandler) Like(c *gin.Context) {
 	if _, err := h.profileRepo.RecalculateFameRating(c.Request.Context(), likedID); err == nil {
 		_ = h.syncSvc.SyncUser(c.Request.Context(), likedID)
 	}
-	notif, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "like", nil, "You have a new like")
-	pushNotification(h.hub, likedID, notif)
 	actor, _ := h.userRepo.GetByID(c.Request.Context(), myID)
-	if actor != nil {
-		_ = h.mailer.Send(
-			exists.Email,
-			"New like on Matcha",
-			actor.FirstName+" "+actor.LastName+" liked your profile.",
-		)
+	if blocked, _ := h.blockRepo.BlockedBy(c.Request.Context(), likedID, myID); !blocked {
+		notif, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "like", nil, "You have a new like")
+		pushNotification(h.hub, likedID, notif)
+		if actor != nil {
+			_ = h.mailer.Send(
+				exists.Email,
+				"New like on Matcha",
+				actor.FirstName+" "+actor.LastName+" liked your profile.",
+			)
+		}
 	}
 
 	isMatch, _ := h.likeRepo.IsMatch(c.Request.Context(), myID, likedID)
 	if isMatch {
-		n1, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "match", nil, "It's a match")
-		n2, _ := h.notificationRepo.Create(c.Request.Context(), myID, &likedID, "match", nil, "It's a match")
-		pushNotification(h.hub, likedID, n1)
-		pushNotification(h.hub, myID, n2)
-		_ = h.mailer.Send(exists.Email, "It's a match on Matcha", "You have a new match.")
-		if actor != nil {
-			_ = h.mailer.Send(actor.Email, "It's a match on Matcha", "You have a new match.")
+		blocked1, _ := h.blockRepo.BlockedBy(c.Request.Context(), likedID, myID)
+		blocked2, _ := h.blockRepo.BlockedBy(c.Request.Context(), myID, likedID)
+		if !blocked1 {
+			n1, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "match", nil, "It's a match")
+			pushNotification(h.hub, likedID, n1)
+			_ = h.mailer.Send(exists.Email, "It's a match on Matcha", "You have a new match.")
+		}
+		if !blocked2 {
+			n2, _ := h.notificationRepo.Create(c.Request.Context(), myID, &likedID, "match", nil, "It's a match")
+			pushNotification(h.hub, myID, n2)
+			if actor != nil {
+				_ = h.mailer.Send(actor.Email, "It's a match on Matcha", "You have a new match.")
+			}
 		}
 	}
 	c.JSON(http.StatusCreated, gin.H{
@@ -165,8 +173,7 @@ func (h *LikesHandler) Unlike(c *gin.Context) {
 	}
 
 	_ = h.likeRepo.Delete(c.Request.Context(), myID, likedID)
-	isBlocked, _ := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, likedID)
-	if !isBlocked {
+	if blocked, _ := h.blockRepo.BlockedBy(c.Request.Context(), likedID, myID); !blocked {
 		n, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "unlike", nil, "A user unliked you")
 		pushNotification(h.hub, likedID, n)
 	}
@@ -189,8 +196,9 @@ func (h *LikesHandler) GetLikedByMe(c *gin.Context) {
 	id := userID.(uuid.UUID)
 
 	limit, offset := parseLimitOffset(c)
+	blockedIDs, _ := h.blockRepo.ListBlockedIDs(c.Request.Context(), id)
 
-	cards, err := h.likeRepo.GetLikedByMe(c.Request.Context(), id, limit, offset)
+	cards, err := h.likeRepo.GetLikedByMe(c.Request.Context(), id, blockedIDs, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -220,8 +228,9 @@ func (h *LikesHandler) GetLikedMe(c *gin.Context) {
 	id := userID.(uuid.UUID)
 
 	limit, offset := parseLimitOffset(c)
+	blockedIDs, _ := h.blockRepo.ListBlockedIDs(c.Request.Context(), id)
 
-	cards, err := h.likeRepo.GetLikedMe(c.Request.Context(), id, limit, offset)
+	cards, err := h.likeRepo.GetLikedMe(c.Request.Context(), id, blockedIDs, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -251,8 +260,9 @@ func (h *LikesHandler) GetMatches(c *gin.Context) {
 	id := userID.(uuid.UUID)
 
 	limit, offset := parseLimitOffset(c)
+	blockedIDs, _ := h.blockRepo.ListBlockedIDs(c.Request.Context(), id)
 
-	cards, err := h.likeRepo.GetMatches(c.Request.Context(), id, limit, offset)
+	cards, err := h.likeRepo.GetMatches(c.Request.Context(), id, blockedIDs, limit, offset)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

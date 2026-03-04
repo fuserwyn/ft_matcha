@@ -58,6 +58,11 @@ export const users = {
   unlike: (id) => api(`/api/v1/users/${id}/like`, { method: 'DELETE' }),
   block: (id) => api(`/api/v1/users/${id}/block`, { method: 'POST' }),
   unblock: (id) => api(`/api/v1/users/${id}/block`, { method: 'DELETE' }),
+  report: (id, body) =>
+    api(`/api/v1/users/${id}/report`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 }
 
 export const matches = {

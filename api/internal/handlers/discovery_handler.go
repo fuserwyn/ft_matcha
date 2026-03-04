@@ -294,8 +294,10 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 			return
 		}
 		_ = h.profileRepo.AddProfileView(c.Request.Context(), viewerID, id)
-		notif, _ := h.notifRepo.Create(c.Request.Context(), id, &viewerID, "visit", nil, "Someone visited your profile")
-		pushNotification(h.hub, id, notif)
+		if blocked, _ := h.blockRepo.BlockedBy(c.Request.Context(), id, viewerID); !blocked {
+			notif, _ := h.notifRepo.Create(c.Request.Context(), id, &viewerID, "visit", nil, "Someone visited your profile")
+			pushNotification(h.hub, id, notif)
+		}
 		if _, err := h.profileRepo.RecalculateFameRating(c.Request.Context(), id); err == nil {
 			_ = h.syncSvc.SyncUser(c.Request.Context(), id)
 		}

@@ -111,17 +111,20 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	notif, _ := h.notificationRepo.Create(
-		c.Request.Context(),
-		otherID,
-		&myID,
-		"message",
-		&m.ID,
-		"New message from match",
-	)
+	var notif *repository.Notification
+	if blocked, _ := h.blockRepo.BlockedBy(c.Request.Context(), otherID, myID); !blocked {
+		notif, _ = h.notificationRepo.Create(
+			c.Request.Context(),
+			otherID,
+			&myID,
+			"message",
+			&m.ID,
+			"New message from match",
+		)
+	}
 	fromUser, _ := h.userRepo.GetByID(c.Request.Context(), myID)
 	toUser, _ := h.userRepo.GetByID(c.Request.Context(), otherID)
-	if fromUser != nil && toUser != nil {
+	if fromUser != nil && toUser != nil && notif != nil {
 		_ = h.mailer.Send(
 			toUser.Email,
 			"New message on Matcha",

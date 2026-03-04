@@ -51,33 +51,33 @@ func (r *LikeRepository) IsMatch(ctx context.Context, userID, otherUserID uuid.U
 	return exists, err
 }
 
-func (r *LikeRepository) GetLikedByMe(ctx context.Context, userID uuid.UUID, limit, offset int) ([]UserCard, error) {
+func (r *LikeRepository) GetLikedByMe(ctx context.Context, userID uuid.UUID, excludeIDs []uuid.UUID, limit, offset int) ([]UserCard, error) {
 	return r.getUserCardsFromLikes(ctx, `
 		SELECT u.id, u.username, u.first_name, u.last_name,
 		       p.gender, p.birth_date, p.bio, p.fame_rating, p.latitude, p.longitude
 		FROM likes l
 		JOIN users u ON u.id = l.liked_user_id
 		LEFT JOIN profiles p ON p.user_id = u.id
-		WHERE l.user_id = $1
+		WHERE l.user_id = $1 AND NOT (u.id = ANY($4::uuid[]))
 		ORDER BY l.created_at DESC
 		LIMIT $2 OFFSET $3
-	`, userID, limit, offset)
+	`, userID, excludeIDs, limit, offset)
 }
 
-func (r *LikeRepository) GetLikedMe(ctx context.Context, userID uuid.UUID, limit, offset int) ([]UserCard, error) {
+func (r *LikeRepository) GetLikedMe(ctx context.Context, userID uuid.UUID, excludeIDs []uuid.UUID, limit, offset int) ([]UserCard, error) {
 	return r.getUserCardsFromLikes(ctx, `
 		SELECT u.id, u.username, u.first_name, u.last_name,
 		       p.gender, p.birth_date, p.bio, p.fame_rating, p.latitude, p.longitude
 		FROM likes l
 		JOIN users u ON u.id = l.user_id
 		LEFT JOIN profiles p ON p.user_id = u.id
-		WHERE l.liked_user_id = $1
+		WHERE l.liked_user_id = $1 AND NOT (u.id = ANY($4::uuid[]))
 		ORDER BY l.created_at DESC
 		LIMIT $2 OFFSET $3
-	`, userID, limit, offset)
+	`, userID, excludeIDs, limit, offset)
 }
 
-func (r *LikeRepository) GetMatches(ctx context.Context, userID uuid.UUID, limit, offset int) ([]UserCard, error) {
+func (r *LikeRepository) GetMatches(ctx context.Context, userID uuid.UUID, excludeIDs []uuid.UUID, limit, offset int) ([]UserCard, error) {
 	return r.getUserCardsFromLikes(ctx, `
 		SELECT u.id, u.username, u.first_name, u.last_name,
 		       p.gender, p.birth_date, p.bio, p.fame_rating, p.latitude, p.longitude
@@ -85,14 +85,17 @@ func (r *LikeRepository) GetMatches(ctx context.Context, userID uuid.UUID, limit
 		JOIN likes l2 ON l1.user_id = l2.liked_user_id AND l1.liked_user_id = l2.user_id
 		JOIN users u ON u.id = l1.liked_user_id
 		LEFT JOIN profiles p ON p.user_id = u.id
-		WHERE l1.user_id = $1
+		WHERE l1.user_id = $1 AND NOT (u.id = ANY($4::uuid[]))
 		ORDER BY l1.created_at DESC
 		LIMIT $2 OFFSET $3
-	`, userID, limit, offset)
+	`, userID, excludeIDs, limit, offset)
 }
 
-func (r *LikeRepository) getUserCardsFromLikes(ctx context.Context, query string, userID uuid.UUID, limit, offset int) ([]UserCard, error) {
-	rows, err := r.pool.Query(ctx, query, userID, limit, offset)
+func (r *LikeRepository) getUserCardsFromLikes(ctx context.Context, query string, userID uuid.UUID, excludeIDs []uuid.UUID, limit, offset int) ([]UserCard, error) {
+	if excludeIDs == nil {
+		excludeIDs = []uuid.UUID{}
+	}
+	rows, err := r.pool.Query(ctx, query, userID, limit, offset, excludeIDs)
 	if err != nil {
 		return nil, err
 	}

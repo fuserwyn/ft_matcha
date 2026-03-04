@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 func DatabaseURL() string {
@@ -110,14 +111,14 @@ func SMTPCooldownSeconds() int {
 
 func PublicAPIBaseURL() string {
 	if v := os.Getenv("PUBLIC_API_BASE_URL"); v != "" {
-		return v
+		return strings.TrimRight(strings.TrimSpace(v), "/")
 	}
 	return "http://localhost:8080"
 }
 
 func FrontendBaseURL() string {
 	if v := os.Getenv("FRONTEND_BASE_URL"); v != "" {
-		return v
+		return strings.TrimRight(strings.TrimSpace(v), "/")
 	}
 	return "http://localhost:3000"
 }

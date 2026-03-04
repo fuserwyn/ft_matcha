@@ -50,18 +50,31 @@ func (r *NotificationRepository) Create(
 	return &n, nil
 }
 
-func (r *NotificationRepository) ListByUser(ctx context.Context, userID uuid.UUID, unreadOnly bool, limit, offset int) ([]Notification, error) {
+func (r *NotificationRepository) ListByUser(ctx context.Context, userID uuid.UUID, excludeActorIDs []uuid.UUID, unreadOnly bool, limit, offset int) ([]Notification, error) {
+	if excludeActorIDs == nil {
+		excludeActorIDs = []uuid.UUID{}
+	}
 	query := `
 		SELECT id, user_id, actor_id, type, entity_id, content, is_read, created_at, read_at
 		FROM notifications
-		WHERE user_id = $1
+		WHERE user_id = $1 AND (actor_id IS NULL OR NOT (actor_id = ANY($4::uuid[])))
 	`
-	args := []any{userID}
+	args := []any{userID, limit, offset, excludeActorIDs}
 	if unreadOnly {
-		query += ` AND is_read = FALSE`
+		query = `
+		SELECT id, user_id, actor_id, type, entity_id, content, is_read, created_at, read_at
+		FROM notifications
+		WHERE user_id = $1 AND is_read = FALSE AND (actor_id IS NULL OR NOT (actor_id = ANY($4::uuid[])))
+		ORDER BY created_at DESC LIMIT $2 OFFSET $3
+		`
+	} else {
+		query = `
+		SELECT id, user_id, actor_id, type, entity_id, content, is_read, created_at, read_at
+		FROM notifications
+		WHERE user_id = $1 AND (actor_id IS NULL OR NOT (actor_id = ANY($4::uuid[])))
+		ORDER BY created_at DESC LIMIT $2 OFFSET $3
+		`
 	}
-	query += ` ORDER BY created_at DESC LIMIT $2 OFFSET $3`
-	args = append(args, limit, offset)
 
 	rows, err := r.pool.Query(ctx, query, args...)
 	if err != nil {

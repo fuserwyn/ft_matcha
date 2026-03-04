@@ -144,7 +144,7 @@ func main() {
 	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, photoRepo, blockRepo, notificationRepo, mailer, syncSvc, wsHub, minioStore, apiBaseURL)
 	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, blockRepo, notificationRepo, mailer, wsHub)
 	photoH := handlers.NewPhotoHandler(photoRepo, minioStore, apiBaseURL)
-	notificationsH := handlers.NewNotificationsHandler(notificationRepo)
+	notificationsH := handlers.NewNotificationsHandler(notificationRepo, blockRepo)
 	reportsH := handlers.NewReportsHandler(reportRepo, userRepo)
 	blocksH := handlers.NewBlocksHandler(blockRepo, userRepo)
 	wsChatH := ws.NewChatHandler(wsHub, likeRepo, messageRepo, userRepo, blockRepo, notificationRepo, presenceRepo, mailer, config.JWTSecret())
