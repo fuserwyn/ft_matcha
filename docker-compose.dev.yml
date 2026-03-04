@@ -1,0 +1,30 @@
+# Development: hot reload with volume mounts
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Or: make dev-docker
+
+services:
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ./api:/app
+      # Exclude tmp to avoid overwriting
+      - /app/tmp
+    command: air -c .air.toml
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      - VITE_API_URL=http://localhost:8080
+      - VITE_API_PROXY=http://api:8080
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    command: sh -c "npm run dev -- --host 0.0.0.0"
+    depends_on:
+      - api
