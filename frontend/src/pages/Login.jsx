@@ -60,9 +60,12 @@ export default function Login() {
               placeholder="••••••••"
               required
               minLength={8}
+              maxLength={72}
               autoComplete="current-password"
             />
-            <p className="text-xs text-slate-500 mt-1">Min 8 characters</p>
+            <p className="text-xs text-slate-500 mt-1">
+              8–72 characters. Avoid common passwords (e.g. password123, qwerty).
+            </p>
           </div>
           <button
             type="submit"
