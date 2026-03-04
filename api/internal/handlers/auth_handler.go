@@ -12,6 +12,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
+	"matcha/api/internal/config"
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/services"
 	"matcha/api/internal/store"
@@ -124,35 +125,46 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
-	token, err := h.issueToken(u.ID)
-	if err != nil {
-		log.Printf("[auth] register ok but token issue failed for user=%s: %v", u.ID, err)
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-		return
-	}
 	log.Printf("[auth] register ok: user=%s username=%q", u.ID, u.Username)
 	if err := h.syncSvc.SyncUser(c.Request.Context(), u.ID); err != nil {
 		log.Printf("[auth] sync to ES failed for user=%s: %v", u.ID, err)
 	}
+
+	if config.E2ESkipEmailVerification() {
+		_ = h.authSvc.VerifyEmail(c.Request.Context(), u.ID)
+		token, err := h.issueToken(u.ID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+		c.JSON(http.StatusCreated, gin.H{
+			"token": token,
+			"user": gin.H{
+				"id":         u.ID,
+				"username":   u.Username,
+				"email":      u.Email,
+				"first_name": u.FirstName,
+				"last_name":  u.LastName,
+			},
+		})
+		return
+	}
+
 	verifyToken, err := h.issueEmailVerificationToken(c.Request.Context(), u.ID)
 	if err != nil {
 		log.Printf("[auth] failed issuing verify token for user=%s: %v", u.ID, err)
-	} else {
-		verifyLink := fmt.Sprintf("%s/api/v1/auth/verify-email?token=%s", h.publicAPIBase, verifyToken)
-		body := fmt.Sprintf("Hi %s,\n\nVerify your email by opening this link:\n%s\n", u.FirstName, verifyLink)
-		if err := h.mailer.Send(u.Email, "Matcha email verification", body); err != nil {
-			log.Printf("[auth] failed sending verify email to user=%s: %v", u.ID, err)
-		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create verification link"})
+		return
+	}
+	verifyLink := fmt.Sprintf("%s/api/v1/auth/verify-email?token=%s", h.publicAPIBase, verifyToken)
+	body := fmt.Sprintf("Hi %s,\n\nVerify your email by opening this link:\n%s\n", u.FirstName, verifyLink)
+	if err := h.mailer.Send(u.Email, "Matcha email verification", body); err != nil {
+		log.Printf("[auth] failed sending verify email to user=%s: %v", u.ID, err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send verification email"})
+		return
 	}
 	c.JSON(http.StatusCreated, gin.H{
-		"token": token,
-		"user": gin.H{
-			"id":         u.ID,
-			"username":   u.Username,
-			"email":      u.Email,
-			"first_name": u.FirstName,
-			"last_name":  u.LastName,
-		},
+		"message": "Please check your email and click the verification link to activate your account.",
 	})
 }
 
@@ -160,14 +172,14 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // @Summary	Verify email
 // @Tags		auth
 // @Param		token	query		string	true	"Email verification token"
-// @Success	302		Redirect to frontend /matches
+// @Success	302		Redirect to frontend /matches with JWT
 // @Failure	302		Redirect to frontend /matches with error param
 // @Router		/api/v1/auth/verify-email [get]
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
-	redirectTo := func(param string) {
+	redirectTo := func(params string) {
 		url := h.frontendBaseURL + "/matches"
-		if param != "" {
-			url += "?" + param
+		if params != "" {
+			url += "?" + params
 		}
 		c.Redirect(http.StatusFound, url)
 	}
@@ -190,7 +202,13 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 		redirectTo("error=verify_failed")
 		return
 	}
-	redirectTo("verified=1")
+	jwtToken, err := h.issueToken(userID)
+	if err != nil {
+		log.Printf("[auth] verify ok but token issue failed for user=%s: %v", userID, err)
+		redirectTo("verified=1")
+		return
+	}
+	redirectTo("verified=1&token=" + jwtToken)
 }
 
 // ForgotPassword godoc

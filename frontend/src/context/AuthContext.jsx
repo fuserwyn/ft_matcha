@@ -8,6 +8,14 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const tokenFromUrl = params.get('token')
+    if (tokenFromUrl) {
+      localStorage.setItem('token', tokenFromUrl)
+      params.delete('token')
+      const newSearch = params.toString()
+      window.history.replaceState({}, '', window.location.pathname + (newSearch ? '?' + newSearch : '') + window.location.hash)
+    }
     const token = localStorage.getItem('token')
     if (!token) {
       setLoading(false)

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { auth } from '../api/client'
 
@@ -14,20 +14,21 @@ export default function Register() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
-  const navigate = useNavigate()
 
   const handleChange = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
   }
 
+  const [success, setSuccess] = useState(false)
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
     setLoading(true)
+    setSuccess(false)
     try {
-      const { token, user } = await auth.register(form)
-      login(token, user)
-      navigate('/profile', { replace: true })
+      await auth.register(form)
+      setSuccess(true)
     } catch (err) {
       setError(err.message || 'Registration failed')
     } finally {
@@ -40,6 +41,11 @@ export default function Register() {
       <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
         <h1 className="text-2xl font-bold text-slate-800 mb-6">Create account</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {success && (
+            <div className="bg-emerald-50 text-emerald-800 px-4 py-3 rounded-lg text-sm border border-emerald-200">
+              Check your email and click the verification link to activate your account.
+            </div>
+          )}
           {error && (
             <div className="bg-rose-50 text-rose-700 px-4 py-3 rounded-lg text-sm">
               {error}
