@@ -25,6 +25,9 @@ export function Layout({ children }) {
       <Link to="/matches" className="text-slate-600 hover:text-rose-600 transition py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center" onClick={closeMobileMenu}>
         Matches
       </Link>
+      <Link to="/likes" className="text-slate-600 hover:text-rose-600 transition py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center" onClick={closeMobileMenu}>
+        Likes
+      </Link>
       <Link to="/views" className="text-slate-600 hover:text-rose-600 transition py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center" onClick={closeMobileMenu}>
         Views
       </Link>

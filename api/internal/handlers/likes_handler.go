@@ -197,8 +197,12 @@ func (h *LikesHandler) GetLikedByMe(c *gin.Context) {
 	}
 
 	result := make([]gin.H, len(cards))
-	for i := range cards {
-		result[i] = toUserCardResp(&cards[i])
+	for i, card := range cards {
+		item := toUserCardResp(&cards[i])
+		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
+			item["primary_photo_url"] = photoURL(p, h.apiBaseURL)
+		}
+		result[i] = item
 	}
 	c.JSON(http.StatusOK, result)
 }
@@ -224,8 +228,12 @@ func (h *LikesHandler) GetLikedMe(c *gin.Context) {
 	}
 
 	result := make([]gin.H, len(cards))
-	for i := range cards {
-		result[i] = toUserCardResp(&cards[i])
+	for i, card := range cards {
+		item := toUserCardResp(&cards[i])
+		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
+			item["primary_photo_url"] = photoURL(p, h.apiBaseURL)
+		}
+		result[i] = item
 	}
 	c.JSON(http.StatusOK, result)
 }

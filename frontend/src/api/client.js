@@ -63,6 +63,17 @@ export const matches = {
   },
 }
 
+export const likes = {
+  listByMe: (params = {}) => {
+    const q = new URLSearchParams(params).toString()
+    return api(`/api/v1/likes${q ? '?' + q : ''}`)
+  },
+  listLikedMe: (params = {}) => {
+    const q = new URLSearchParams(params).toString()
+    return api(`/api/v1/likes/me${q ? '?' + q : ''}`)
+  },
+}
+
 export const chat = {
   listMessages: (userId, params = {}) => {
     const q = new URLSearchParams(params).toString()
