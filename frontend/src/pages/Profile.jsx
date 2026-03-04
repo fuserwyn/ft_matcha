@@ -153,17 +153,36 @@ export default function Profile() {
       return
     }
     setError('')
+    setMessage('Getting your location...')
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setData((d) => ({
-          ...d,
-          latitude: String(pos.coords.latitude),
-          longitude: String(pos.coords.longitude),
-        }))
-        setMessage('Coordinates updated from GPS')
+      async (pos) => {
+        const { latitude, longitude } = pos.coords
+        setData((d) => ({ ...d, latitude: String(latitude), longitude: String(longitude) }))
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`,
+            { headers: { 'Accept-Language': 'en' } },
+          )
+          const place = await res.json()
+          const city =
+            place.address?.city ||
+            place.address?.town ||
+            place.address?.village ||
+            place.address?.county ||
+            ''
+          if (city) {
+            setData((d) => ({ ...d, latitude: String(latitude), longitude: String(longitude), city }))
+            setMessage(`Location set to ${city}`)
+          } else {
+            setMessage('GPS coordinates updated')
+          }
+        } catch {
+          setMessage('GPS coordinates updated (city lookup failed)')
+        }
       },
       () => {
         setError('Unable to retrieve your location')
+        setMessage('')
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     )
@@ -454,60 +473,30 @@ export default function Profile() {
           />
           <p className="text-xs text-slate-500 mt-1">YYYY-MM-DD, 18+</p>
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="col-span-2">
-            <label className="block text-sm font-medium text-slate-700 mb-1">City</label>
-            <input
-              type="text"
-              name="city"
-              value={data.city}
-              onChange={handleChange}
-              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
-              placeholder="Paris"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Latitude</label>
-            <input
-              type="number"
-              name="latitude"
-              value={data.latitude}
-              onChange={handleChange}
-              step="any"
-              min="-90"
-              max="90"
-              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
-              placeholder="-90 to 90"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-1">Longitude</label>
-            <input
-              type="number"
-              name="longitude"
-              value={data.longitude}
-              onChange={handleChange}
-              step="any"
-              min="-180"
-              max="180"
-              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
-              placeholder="-180 to 180"
-            />
-          </div>
-          <div className="col-span-2 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={handleUseMyLocation}
-              className="px-3 py-2 rounded border border-slate-300 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Use my current GPS location
-            </button>
-            {data.latitude && data.longitude && !isNaN(parseFloat(data.latitude)) && !isNaN(parseFloat(data.longitude)) && (
-              <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
-                ✓ Location set ({parseFloat(data.latitude).toFixed(2)}, {parseFloat(data.longitude).toFixed(2)})
-              </span>
-            )}
-          </div>
+        <div>
+          <label className="block text-sm font-medium text-slate-700 mb-1">City</label>
+          <input
+            type="text"
+            name="city"
+            value={data.city}
+            onChange={handleChange}
+            className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+            placeholder="Paris"
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleUseMyLocation}
+            className="px-3 py-2 rounded border border-slate-300 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Use my current GPS location
+          </button>
+          {data.latitude && data.longitude && !isNaN(parseFloat(data.latitude)) && !isNaN(parseFloat(data.longitude)) && (
+            <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+              Location set ({parseFloat(data.latitude).toFixed(2)}, {parseFloat(data.longitude).toFixed(2)})
+            </span>
+          )}
         </div>
         <button
           type="submit"
