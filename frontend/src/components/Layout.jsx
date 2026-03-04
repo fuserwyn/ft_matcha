@@ -56,8 +56,8 @@ export function Layout({ children }) {
   )
 
   return (
-    <div className="min-h-screen">
-      <nav className="bg-white border-b border-slate-200 shadow-sm pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+    <div className="min-h-screen flex flex-col">
+      <nav className="sticky top-0 z-20 bg-white border-b border-slate-200 shadow-sm pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
         <div className="max-w-4xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between min-w-0">
           <Link to="/" className="text-xl font-semibold text-rose-600">
             Matcha
@@ -81,7 +81,14 @@ export function Layout({ children }) {
           </div>
         </div>
       </nav>
-      <main className="max-w-4xl mx-auto px-3 sm:px-4 py-6 sm:py-8 min-w-0">{children}</main>
+      <main className="flex-1 max-w-4xl mx-auto w-full px-3 sm:px-4 py-6 sm:py-8 min-w-0">{children}</main>
+      <footer className="bg-white border-t border-slate-200 mt-auto pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-slate-500">
+          <span className="font-medium text-rose-600">Matcha</span>
+          <span>Because love, too, can be industrialized.</span>
+          <span>© {new Date().getFullYear()}</span>
+        </div>
+      </footer>
     </div>
   )
 }
