@@ -214,7 +214,7 @@ export default function Chat() {
         {messages.length === 0 ? (
           <p className="text-slate-500 text-sm">No messages yet.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3" key={user?.id}>
             {messages.map((m) => {
               const mine = m.sender_id === user?.id
               return (
