@@ -259,6 +259,51 @@ func (r *ProfileRepository) GetViewedProfiles(ctx context.Context, viewerUserID 
 	return result, rows.Err()
 }
 
+func (r *ProfileRepository) GetProfilesWhoViewedMe(ctx context.Context, viewedUserID uuid.UUID, limit, offset int) ([]ViewedProfile, error) {
+	rows, err := r.pool.Query(ctx, `
+		WITH latest AS (
+			SELECT viewer_user_id, MAX(created_at) AS last_viewed_at
+			FROM profile_views
+			WHERE viewed_user_id = $1
+			GROUP BY viewer_user_id
+		)
+		SELECT
+			u.id, u.username, u.first_name, u.last_name,
+			p.city, COALESCE(p.fame_rating, 0), l.last_viewed_at
+		FROM latest l
+		JOIN users u ON u.id = l.viewer_user_id
+		LEFT JOIN profiles p ON p.user_id = u.id
+		ORDER BY l.last_viewed_at DESC
+		LIMIT $2 OFFSET $3
+	`, viewedUserID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []ViewedProfile
+	for rows.Next() {
+		var item ViewedProfile
+		var city sql.NullString
+		if err := rows.Scan(
+			&item.UserID,
+			&item.Username,
+			&item.FirstName,
+			&item.LastName,
+			&city,
+			&item.FameRating,
+			&item.LastViewedAt,
+		); err != nil {
+			return nil, err
+		}
+		if city.Valid {
+			item.City = &city.String
+		}
+		result = append(result, item)
+	}
+	return result, rows.Err()
+}
+
 func (r *ProfileRepository) RecalculateFameRating(ctx context.Context, userID uuid.UUID) (int, error) {
 	var score int
 	err := r.pool.QueryRow(ctx, `

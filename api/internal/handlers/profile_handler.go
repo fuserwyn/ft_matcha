@@ -287,6 +287,58 @@ func (h *ProfileHandler) GetViewedHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
+// GetViewedMe godoc
+// @Summary	Get profiles who viewed me
+// @Tags		profile
+// @Security	BearerAuth
+// @Produce	json
+// @Param		limit	query		int	false	"Limit (default 20)"
+// @Param		offset	query		int	false	"Offset"
+// @Success	200	{array}		object
+// @Router		/api/v1/profile/me/viewed-by [get]
+func (h *ProfileHandler) GetViewedMe(c *gin.Context) {
+	userID, _ := c.Get(middleware.UserIDKey)
+	id := userID.(uuid.UUID)
+
+	limit := 20
+	offset := 0
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 100 {
+			limit = n
+		}
+	}
+	if v := c.Query("offset"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			offset = n
+		}
+	}
+
+	history, err := h.profileRepo.GetProfilesWhoViewedMe(c.Request.Context(), id, limit, offset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp := make([]gin.H, len(history))
+	for i := range history {
+		resp[i] = gin.H{
+			"id":             history[i].UserID,
+			"username":       history[i].Username,
+			"first_name":     history[i].FirstName,
+			"last_name":      history[i].LastName,
+			"fame_rating":    history[i].FameRating,
+			"last_viewed_at": history[i].LastViewedAt,
+		}
+		if history[i].City != nil {
+			resp[i]["city"] = *history[i].City
+		}
+		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), history[i].UserID); err == nil && p != nil {
+			resp[i]["primary_photo_url"] = photoURL(p, h.apiBaseURL)
+		}
+	}
+	c.JSON(http.StatusOK, resp)
+}
+
 // TagSuggestions godoc
 // @Summary	Get tag suggestions (top tags or prefix match, e.g. ?q=mus -> music)
 // @Tags		profile

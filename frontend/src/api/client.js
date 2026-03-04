@@ -40,6 +40,10 @@ export const profile = {
     const q = new URLSearchParams(params).toString()
     return api(`/api/v1/profile/me/views${q ? '?' + q : ''}`)
   },
+  getViewedBy: (params = {}) => {
+    const q = new URLSearchParams(params).toString()
+    return api(`/api/v1/profile/me/viewed-by${q ? '?' + q : ''}`)
+  },
 }
 
 export const users = {

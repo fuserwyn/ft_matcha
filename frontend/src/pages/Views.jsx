@@ -2,29 +2,39 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { profile } from '../api/client'
 
+const TABS = [
+  { id: 'by-me', label: 'I viewed', fetch: profile.getViewedHistory },
+  { id: 'viewed-me', label: 'Viewed me', fetch: profile.getViewedBy },
+]
+
 export default function Views() {
+  const [activeTab, setActiveTab] = useState('by-me')
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  const currentTab = TABS.find((t) => t.id === activeTab)
+  const isByMe = activeTab === 'by-me'
+
   useEffect(() => {
     let active = true
-    ;(async () => {
-      setLoading(true)
-      setError('')
-      try {
-        const data = await profile.getViewedHistory({ limit: 100 })
+    setLoading(true)
+    setError('')
+    currentTab
+      .fetch({ limit: 100 })
+      .then((data) => {
         if (active) setItems(data)
-      } catch (err) {
-        if (active) setError(err.message || 'Failed to load history')
-      } finally {
+      })
+      .catch((err) => {
+        if (active) setError(err.message || 'Failed to load views')
+      })
+      .finally(() => {
         if (active) setLoading(false)
-      }
-    })()
+      })
     return () => {
       active = false
     }
-  }, [])
+  }, [activeTab])
 
   if (loading) {
     return (
@@ -37,9 +47,28 @@ export default function Views() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Profile views</h1>
+
+      <div className="flex gap-2 mb-6 border-b border-slate-200">
+        {TABS.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`px-4 py-2 text-sm font-medium rounded-t-lg transition ${
+              activeTab === tab.id
+                ? 'bg-rose-50 text-rose-600 border-b-2 border-rose-500 -mb-px'
+                : 'text-slate-600 hover:text-rose-600 hover:bg-slate-50'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
       {error && <p className="text-rose-600 mb-4">{error}</p>}
       {items.length === 0 ? (
-        <p className="text-slate-500">No profiles viewed yet.</p>
+        <p className="text-slate-500">
+          {isByMe ? 'No profiles viewed yet.' : 'No one has viewed your profile yet.'}
+        </p>
       ) : (
         <div className="space-y-3">
           {items.map((u) => (
@@ -66,7 +95,7 @@ export default function Views() {
                   </p>
                   <p className="text-sm text-slate-500">@{u.username}</p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    Viewed {new Date(u.last_viewed_at).toLocaleString()}
+                    {isByMe ? 'Viewed' : 'Viewed you'} {new Date(u.last_viewed_at).toLocaleString()}
                   </p>
                 </div>
               </div>

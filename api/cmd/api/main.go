@@ -203,6 +203,7 @@ func main() {
 			profile.GET("/tags/suggestions", profileH.TagSuggestions)
 			profile.GET("/cities/suggestions", profileH.CitySuggestions)
 			profile.GET("/me/views", profileH.GetViewedHistory)
+			profile.GET("/me/viewed-by", profileH.GetViewedMe)
 		}
 
 		users := api.Group("/users")
