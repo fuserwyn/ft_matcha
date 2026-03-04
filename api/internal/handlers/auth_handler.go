@@ -177,43 +177,58 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // @Failure	302		Redirect to frontend /matches with error param
 // @Router		/api/v1/auth/verify-email [get]
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
-	redirectTo := func(params string) {
-		base := strings.TrimRight(strings.TrimSpace(h.frontendBaseURL), "/")
-		if base == "" || base == "about:blank" {
-			base = "http://localhost:3000"
-		}
-		url := base + "/matches"
+	base := strings.TrimRight(strings.TrimSpace(h.frontendBaseURL), "/")
+	if base == "" {
+		base = "http://localhost:3000"
+	}
+
+	jsRedirect := func(params string) {
+		target := base + "/matches"
 		if params != "" {
-			url += "?" + params
+			target += "?" + params
 		}
-		c.Redirect(http.StatusFound, url)
+		body := `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Matcha — Email Verification</title>
+</head>
+<body>
+  <p>Verifying your email, please wait...</p>
+  <script>window.location.replace("` + target + `");</script>
+  <noscript><meta http-equiv="refresh" content="0;url=` + target + `"></noscript>
+  <p>If you are not redirected, <a href="` + target + `">click here</a>.</p>
+</body>
+</html>`
+		c.Header("Content-Type", "text/html; charset=utf-8")
+		c.String(http.StatusOK, body)
 	}
 
 	token := c.Query("token")
 	if token == "" {
-		redirectTo("error=token_required")
+		jsRedirect("error=token_required")
 		return
 	}
 	userID, err := h.tokenStore.GetAndDeleteEmailVerify(c.Request.Context(), token)
 	if err != nil {
 		if err == store.ErrTokenNotFound {
-			redirectTo("already=1")
+			jsRedirect("already=1")
 			return
 		}
-		redirectTo("error=internal")
+		jsRedirect("error=internal")
 		return
 	}
 	if err := h.authSvc.VerifyEmail(c.Request.Context(), userID); err != nil {
-		redirectTo("error=verify_failed")
+		jsRedirect("error=verify_failed")
 		return
 	}
 	jwtToken, err := h.issueToken(userID)
 	if err != nil {
 		log.Printf("[auth] verify ok but token issue failed for user=%s: %v", userID, err)
-		redirectTo("verified=1")
+		jsRedirect("verified=1")
 		return
 	}
-	redirectTo("verified=1&token=" + jwtToken)
+	jsRedirect("verified=1&token=" + jwtToken)
 }
 
 // ForgotPassword godoc
