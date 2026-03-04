@@ -282,7 +282,10 @@ func (h *PhotoHandler) ServePhoto(c *gin.Context) {
 }
 
 // photoURL returns the URL for a photo. Seed photos (objectKey starts with "seed/") use stored URL (picsum);
-// user-uploaded photos use the API serve endpoint.
-func photoURL(p *repository.Photo, _ string) string {
-	return p.URL
+// user-uploaded photos are proxied through the API serve endpoint so the browser never needs direct MinIO access.
+func photoURL(p *repository.Photo, apiBaseURL string) string {
+	if strings.HasPrefix(p.ObjectKey, "seed/") {
+		return p.URL
+	}
+	return apiBaseURL + "/api/v1/photos/serve/" + p.ID.String()
 }
