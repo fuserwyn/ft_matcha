@@ -893,13 +893,18 @@ func extractAndVerify(t *testing.T, apiBase, body string) {
 		t.Fatalf("empty token in verify link")
 	}
 	verifyURL := apiBase + "/api/v1/auth/verify-email?token=" + token
-	resp2, err := http.Get(verifyURL)
+	client := &http.Client{CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+	resp2, err := client.Get(verifyURL)
 	if err != nil {
 		t.Fatalf("verify request: %v", err)
 	}
 	defer resp2.Body.Close()
-	if resp2.StatusCode != http.StatusOK {
+	if resp2.StatusCode != http.StatusFound {
 		raw, _ := io.ReadAll(resp2.Body)
 		t.Fatalf("verify failed: status=%d body=%s", resp2.StatusCode, string(raw))
+	}
+	loc := resp2.Header.Get("Location")
+	if loc == "" || !strings.Contains(loc, "/matches") {
+		t.Fatalf("verify redirect missing /matches: Location=%q", loc)
 	}
 }

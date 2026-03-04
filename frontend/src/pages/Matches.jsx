@@ -1,12 +1,31 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { matches, users } from '../api/client'
 
 export default function Matches() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [blockingId, setBlockingId] = useState(null)
+
+  const [flashMessage, setFlashMessage] = useState(null)
+
+  useEffect(() => {
+    const verified = searchParams.get('verified')
+    const already = searchParams.get('already')
+    const errParam = searchParams.get('error')
+    if (verified) {
+      setFlashMessage('verified')
+      setSearchParams({}, { replace: true })
+    } else if (already) {
+      setFlashMessage('already')
+      setSearchParams({}, { replace: true })
+    } else if (errParam) {
+      setFlashMessage('error')
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   useEffect(() => {
     let active = true
@@ -38,6 +57,21 @@ export default function Matches() {
   return (
     <div>
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Matches</h1>
+      {flashMessage === 'verified' && (
+        <div className="mb-4 p-4 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200">
+          Email verified successfully.
+        </div>
+      )}
+      {flashMessage === 'already' && (
+        <div className="mb-4 p-4 rounded-lg bg-slate-100 text-slate-700 border border-slate-200">
+          Your email was already verified.
+        </div>
+      )}
+      {flashMessage === 'error' && (
+        <div className="mb-4 p-4 rounded-lg bg-amber-50 text-amber-800 border border-amber-200">
+          Verification link is invalid or expired.
+        </div>
+      )}
       {error && <p className="text-rose-600 mb-4">{error}</p>}
       {items.length === 0 ? (
         <p className="text-slate-500">No matches yet.</p>

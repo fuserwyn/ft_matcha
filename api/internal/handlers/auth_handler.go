@@ -159,32 +159,38 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // VerifyEmail godoc
 // @Summary	Verify email
 // @Tags		auth
-// @Produce	json
 // @Param		token	query		string	true	"Email verification token"
-// @Success	200		{object}	map[string]string
-// @Failure	400		{object}	map[string]string
-// @Failure	401		{object}	map[string]string
+// @Success	302		Redirect to frontend /matches
+// @Failure	302		Redirect to frontend /matches with error param
 // @Router		/api/v1/auth/verify-email [get]
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
+	redirectTo := func(param string) {
+		url := h.frontendBaseURL + "/matches"
+		if param != "" {
+			url += "?" + param
+		}
+		c.Redirect(http.StatusFound, url)
+	}
+
 	token := c.Query("token")
 	if token == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "token is required"})
+		redirectTo("error=token_required")
 		return
 	}
 	userID, err := h.tokenStore.GetAndDeleteEmailVerify(c.Request.Context(), token)
 	if err != nil {
 		if err == store.ErrTokenNotFound {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired verification token"})
+			redirectTo("already=1")
 			return
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		redirectTo("error=internal")
 		return
 	}
 	if err := h.authSvc.VerifyEmail(c.Request.Context(), userID); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		redirectTo("error=verify_failed")
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "email verified"})
+	redirectTo("verified=1")
 }
 
 // ForgotPassword godoc
