@@ -180,9 +180,31 @@ export default function Profile() {
           setMessage('GPS coordinates updated (city lookup failed)')
         }
       },
-      () => {
-        setError('Unable to retrieve your location')
+      async (err) => {
         setMessage('')
+        if (err.code === 1 && location.protocol !== 'https:') {
+          // Permission denied on HTTP — fall back to IP-based geolocation
+          try {
+            const res = await fetch('https://ipapi.co/json/')
+            const data = await res.json()
+            if (data.latitude && data.longitude) {
+              const city = data.city || ''
+              setData((d) => ({
+                ...d,
+                latitude: String(data.latitude),
+                longitude: String(data.longitude),
+                ...(city ? { city } : {}),
+              }))
+              setMessage(`Location set${city ? ` to ${city}` : ''} (via IP — GPS requires HTTPS)`)
+            } else {
+              setError('Location unavailable. GPS requires HTTPS; set your city manually.')
+            }
+          } catch {
+            setError('Location unavailable. GPS requires HTTPS; set your city manually.')
+          }
+        } else {
+          setError('Unable to retrieve your location. Please set your city manually.')
+        }
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
     )
