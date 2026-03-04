@@ -26,6 +26,7 @@ export default function Profile() {
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [loading, setLoading] = useState(true)
   const [savingAccount, setSavingAccount] = useState(false)
+  const [savedAccount, setSavedAccount] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [savingTags, setSavingTags] = useState(false)
@@ -33,6 +34,8 @@ export default function Profile() {
   const [photoList, setPhotoList] = useState([])
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [tagsMessage, setTagsMessage] = useState('')
+  const [tagsError, setTagsError] = useState('')
 
   useEffect(() => {
     Promise.all([auth.me(), profile.get(), profile.getTags(), profile.tagSuggestions()])
@@ -79,6 +82,8 @@ export default function Profile() {
       await auth.updateMe(account)
       updateUser({ username: account.username })
       setMessage('Account updated')
+      setSavedAccount(true)
+      setTimeout(() => setSavedAccount(false), 2000)
     } catch (err) {
       setError(err.message || 'Account update failed')
     } finally {
@@ -124,8 +129,8 @@ export default function Profile() {
   }
 
   const handleSaveTags = async () => {
-    setError('')
-    setMessage('')
+    setTagsError('')
+    setTagsMessage('')
     setSavingTags(true)
     try {
       const tags = tagsInput
@@ -133,9 +138,10 @@ export default function Profile() {
         .map((x) => x.trim())
         .filter(Boolean)
       await profile.updateTags(tags)
-      setMessage('Tags updated')
+      setTagsMessage('Tags updated')
+      setTimeout(() => setTagsMessage(''), 3000)
     } catch (err) {
-      setError(err.message || 'Tags update failed')
+      setTagsError(err.message || 'Tags update failed')
     } finally {
       setSavingTags(false)
     }
@@ -268,9 +274,11 @@ export default function Profile() {
         <button
           type="submit"
           disabled={savingAccount}
-          className="py-2 px-4 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-900 disabled:opacity-50 transition"
+          className={`py-2 px-4 text-white font-medium rounded-lg transition disabled:opacity-50 ${
+            savedAccount ? 'bg-emerald-600' : savingAccount ? 'bg-emerald-500 opacity-80' : 'bg-slate-800 hover:bg-slate-900'
+          }`}
         >
-          {savingAccount ? 'Saving account...' : 'Save account'}
+          {savingAccount ? 'Saving account...' : savedAccount ? 'Saved!' : 'Save account'}
         </button>
       </form>
       <div className="space-y-3 mb-6 p-4 bg-white rounded-lg border border-slate-200">
@@ -313,6 +321,12 @@ export default function Profile() {
             {savingTags ? 'Saving tags...' : 'Save tags'}
           </button>
         </div>
+        {tagsError && (
+          <div className="mt-2 bg-rose-50 text-rose-700 px-4 py-2 rounded-lg text-sm">{tagsError}</div>
+        )}
+        {tagsMessage && (
+          <div className="mt-2 bg-emerald-50 text-emerald-700 px-4 py-2 rounded-lg text-sm">{tagsMessage}</div>
+        )}
       </div>
       <div className="mb-6 p-4 bg-white rounded-lg border border-slate-200">
         <div className="flex items-center justify-between mb-3">
