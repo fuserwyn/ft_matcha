@@ -26,8 +26,8 @@ type UserCard struct {
 type DiscoveryFilters struct {
 	ExcludeID     uuid.UUID
 	ExcludeIDs    []uuid.UUID
-	Gender        string
-	Interest      string
+	Genders       []string
+	Interests     []string
 	Tags          []string
 	StrictTags    bool
 	City          string
@@ -57,12 +57,20 @@ func (r *DiscoveryRepository) SearchCities(ctx context.Context, prefix string, l
 	return r.search.SearchCities(ctx, prefix, limit)
 }
 
+func (r *DiscoveryRepository) SearchTags(ctx context.Context, prefix string, limit int) ([]string, error) {
+	return r.search.SearchTags(ctx, prefix, limit)
+}
+
+func (r *DiscoveryRepository) FilterAggregations(ctx context.Context, excludeID uuid.UUID, excludeIDs []uuid.UUID) (gender map[string]int64, interest map[string]int64, err error) {
+	return r.search.FilterAggregations(ctx, excludeID, excludeIDs)
+}
+
 func (r *DiscoveryRepository) Search(ctx context.Context, f DiscoveryFilters) ([]UserCard, error) {
 	sf := search.SearchFilters{
 		ExcludeID:     f.ExcludeID,
 		ExcludeIDs:    f.ExcludeIDs,
-		Gender:        f.Gender,
-		Interest:      f.Interest,
+		Genders:       f.Genders,
+		Interests:     f.Interests,
 		Tags:          f.Tags,
 		StrictTags:    f.StrictTags,
 		City:          f.City,

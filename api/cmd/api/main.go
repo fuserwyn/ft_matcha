@@ -209,6 +209,7 @@ func main() {
 		users.Use(authMw, touchPresenceMw)
 		{
 			users.GET("", discoveryH.Search)
+			users.GET("/filters/aggregations", discoveryH.FilterAggregations)
 			users.GET("/:id", discoveryH.GetByID)
 			users.GET("/:id/photos", photoH.ListByUser)
 			users.POST("/:id/like", likesH.Like)

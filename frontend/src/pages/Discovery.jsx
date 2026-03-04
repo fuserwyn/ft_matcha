@@ -10,9 +10,12 @@ export default function Discovery() {
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [citySuggestions, setCitySuggestions] = useState([])
+  const [tagSuggestions, setTagSuggestions] = useState([])
+  const [tagSuggestionsOpen, setTagSuggestionsOpen] = useState(false)
+  const [aggregations, setAggregations] = useState({ gender: {}, interest: {} })
   const [filters, setFilters] = useState({
-    gender: '',
-    interest: '',
+    genders: [],
+    interests: [],
     min_age: '',
     max_age: '',
     min_fame: '',
@@ -24,16 +27,16 @@ export default function Discovery() {
     sort_order: '',
   })
 
+  useEffect(() => {
+    users.filterAggregations().then((r) => setAggregations({ gender: r.gender || {}, interest: r.interest || {} })).catch(() => {})
+  }, [])
+
   const load = async () => {
     setLoading(true)
     try {
       const params = {}
-      if (filters.interest && filters.interest !== 'both') {
-        // "Interested in" should filter target profile gender.
-        params.gender = filters.interest
-      } else if (filters.gender) {
-        params.gender = filters.gender
-      }
+      if (filters.genders?.length > 0) params.gender = filters.genders.join(',')
+      if (filters.interests?.length > 0) params.interest = filters.interests.join(',')
       if (filters.min_age) params.min_age = filters.min_age
       if (filters.max_age) params.max_age = filters.max_age
       if (filters.min_fame) params.min_fame = filters.min_fame
@@ -66,10 +69,27 @@ export default function Discovery() {
   }, [filters.city])
 
   useEffect(() => {
+    const lastComma = filters.tags.lastIndexOf(',')
+    const prefix = (lastComma >= 0 ? filters.tags.slice(lastComma + 1) : filters.tags).trim().toLowerCase()
+    if (prefix.length < 2) {
+      setTagSuggestions([])
+      setTagSuggestionsOpen(false)
+      return
+    }
+    const t = setTimeout(() => {
+      profile.tagSuggestions(prefix).then((r) => {
+        setTagSuggestions(r.tags || [])
+        setTagSuggestionsOpen(true)
+      }).catch(() => setTagSuggestions([]))
+    }, 200)
+    return () => clearTimeout(t)
+  }, [filters.tags])
+
+  useEffect(() => {
     load()
   }, [
-    filters.gender,
-    filters.interest,
+    filters.genders,
+    filters.interests,
     filters.min_age,
     filters.max_age,
     filters.min_fame,
@@ -84,6 +104,26 @@ export default function Discovery() {
   const handleFilterChange = (e) => {
     const { name, value } = e.target
     setFilters((f) => ({ ...f, [name]: value }))
+  }
+
+  const toggleGender = (g) => {
+    setFilters((f) => ({
+      ...f,
+      genders: f.genders?.includes(g) ? f.genders.filter((x) => x !== g) : [...(f.genders || []), g],
+    }))
+  }
+  const toggleInterest = (i) => {
+    setFilters((f) => ({
+      ...f,
+      interests: f.interests?.includes(i) ? f.interests.filter((x) => x !== i) : [...(f.interests || []), i],
+    }))
+  }
+
+  const applyTagSuggestion = (tag) => {
+    const lastComma = filters.tags.lastIndexOf(',')
+    const before = lastComma >= 0 ? filters.tags.slice(0, lastComma + 1) : ''
+    setFilters((f) => ({ ...f, tags: (before + (before ? ' ' : '') + tag).trim() }))
+    setTagSuggestionsOpen(false)
   }
 
   const age = (birthDate) => {
@@ -110,31 +150,45 @@ export default function Discovery() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
           <div>
             <label className="block text-xs text-slate-500 mb-1">Gender</label>
-            <select
-              name="gender"
-              value={filters.gender}
-              onChange={handleFilterChange}
-              className="w-full px-3 py-2.5 sm:py-2 rounded border border-slate-200 text-sm min-h-[44px] sm:min-h-0"
-            >
-              <option value="">Any</option>
+            <div className="flex flex-wrap gap-2">
               {GENDERS.map((g) => (
-                <option key={g} value={g}>{g}</option>
+                <label key={g} className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filters.genders?.includes(g) || false}
+                    onChange={() => toggleGender(g)}
+                    className="rounded border-slate-300 text-rose-500 focus:ring-rose-400"
+                  />
+                  <span className="text-sm">
+                    {g}
+                    {aggregations.gender[g] != null && (
+                      <span className="text-slate-400 ml-0.5">({aggregations.gender[g]})</span>
+                    )}
+                  </span>
+                </label>
               ))}
-            </select>
+            </div>
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Looking for</label>
-            <select
-              name="interest"
-              value={filters.interest}
-              onChange={handleFilterChange}
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
-            >
-              <option value="">Any</option>
+            <div className="flex flex-wrap gap-2">
               {INTERESTS.map((i) => (
-                <option key={i} value={i}>{i}</option>
+                <label key={i} className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={filters.interests?.includes(i) || false}
+                    onChange={() => toggleInterest(i)}
+                    className="rounded border-slate-300 text-rose-500 focus:ring-rose-400"
+                  />
+                  <span className="text-sm">
+                    {i}
+                    {aggregations.interest[i] != null && (
+                      <span className="text-slate-400 ml-0.5">({aggregations.interest[i]})</span>
+                    )}
+                  </span>
+                </label>
               ))}
-            </select>
+            </div>
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Min age</label>
@@ -204,16 +258,33 @@ export default function Discovery() {
               ))}
             </datalist>
           </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Tags (comma)</label>
+          <div className="relative">
+            <label className="block text-xs text-slate-500 mb-1">Tags (comma, partial: mus → music)</label>
             <input
               type="text"
               name="tags"
               value={filters.tags}
               onChange={handleFilterChange}
-              placeholder="music,travel"
+              onBlur={() => setTimeout(() => setTagSuggestionsOpen(false), 150)}
+              onFocus={() => tagSuggestions.length > 0 && setTagSuggestionsOpen(true)}
+              placeholder="music, travel, mus..."
+              autoComplete="off"
               className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
             />
+            {tagSuggestionsOpen && tagSuggestions.length > 0 && (
+              <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-auto">
+                {tagSuggestions.map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    className="block w-full text-left px-3 py-2 text-sm hover:bg-rose-50"
+                    onClick={() => applyTagSuggestion(t)}
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">Max distance (km)</label>

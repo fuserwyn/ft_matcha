@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -39,8 +40,8 @@ type GeoPoint struct {
 type SearchFilters struct {
 	ExcludeID     uuid.UUID
 	ExcludeIDs    []uuid.UUID
-	Gender        string
-	Interest      string
+	Genders       []string // multiple: male, female, etc.
+	Interests     []string // multiple: male, female, both, etc.
 	Tags          []string
 	StrictTags    bool
 	City          string
@@ -209,6 +210,152 @@ func (c *Client) SearchCities(ctx context.Context, prefix string, limit int) ([]
 	return cities, nil
 }
 
+func (c *Client) SearchTags(ctx context.Context, prefix string, limit int) ([]string, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	prefix = strings.TrimSpace(strings.ToLower(prefix))
+	if prefix == "" {
+		return nil, nil
+	}
+	// Regex for tags starting with prefix (case-insensitive)
+	includePattern := "(?i)" + regexp.QuoteMeta(prefix) + ".*"
+	query := map[string]interface{}{
+		"size": 0,
+		"query": map[string]interface{}{
+			"exists": map[string]interface{}{"field": "tags"},
+		},
+		"aggs": map[string]interface{}{
+			"tags": map[string]interface{}{
+				"terms": map[string]interface{}{
+					"field":    "tags",
+					"size":     limit,
+					"order":    map[string]interface{}{"_key": "asc"},
+					"include":  includePattern,
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(query)
+	if err != nil {
+		return nil, err
+	}
+	req := esapi.SearchRequest{
+		Index: []string{IndexName},
+		Body:  bytes.NewReader(body),
+	}
+	res, err := req.Do(ctx, c.es)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.IsError() {
+		return nil, fmt.Errorf("search tags: %s", res.String())
+	}
+	var result struct {
+		Aggregations struct {
+			Tags struct {
+				Buckets []struct {
+					Key string `json:"key"`
+				} `json:"buckets"`
+			} `json:"tags"`
+		} `json:"aggregations"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+	tags := make([]string, 0, len(result.Aggregations.Tags.Buckets))
+	for _, b := range result.Aggregations.Tags.Buckets {
+		if b.Key != "" {
+			tags = append(tags, b.Key)
+		}
+	}
+	return tags, nil
+}
+
+func (c *Client) FilterAggregations(ctx context.Context, excludeID uuid.UUID, excludeIDs []uuid.UUID) (gender map[string]int64, interest map[string]int64, err error) {
+	mustNot := []map[string]interface{}{
+		{"term": map[string]interface{}{"user_id": excludeID.String()}},
+	}
+	for _, id := range excludeIDs {
+		if id != uuid.Nil {
+			mustNot = append(mustNot, map[string]interface{}{
+				"term": map[string]interface{}{"user_id": id.String()},
+			})
+		}
+	}
+	query := map[string]interface{}{
+		"size": 0,
+		"query": map[string]interface{}{
+			"bool": map[string]interface{}{"must_not": mustNot},
+		},
+		"aggs": map[string]interface{}{
+			"gender": map[string]interface{}{
+				"terms": map[string]interface{}{
+					"field": "gender",
+					"size":  20,
+					"order": map[string]interface{}{"_key": "asc"},
+				},
+			},
+			"sexual_preference": map[string]interface{}{
+				"terms": map[string]interface{}{
+					"field": "sexual_preference",
+					"size":  20,
+					"order": map[string]interface{}{"_key": "asc"},
+				},
+			},
+		},
+	}
+	body, err := json.Marshal(query)
+	if err != nil {
+		return nil, nil, err
+	}
+	req := esapi.SearchRequest{
+		Index: []string{IndexName},
+		Body:  bytes.NewReader(body),
+	}
+	res, err := req.Do(ctx, c.es)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer res.Body.Close()
+	if res.IsError() {
+		return nil, nil, fmt.Errorf("filter aggregations: %s", res.String())
+	}
+	var result struct {
+		Aggregations struct {
+			Gender struct {
+				Buckets []struct {
+					Key   string `json:"key"`
+					Count int64  `json:"doc_count"`
+				} `json:"buckets"`
+			} `json:"gender"`
+			SexualPreference struct {
+				Buckets []struct {
+					Key   string `json:"key"`
+					Count int64  `json:"doc_count"`
+				} `json:"buckets"`
+			} `json:"sexual_preference"`
+		} `json:"aggregations"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		return nil, nil, err
+	}
+	gender = make(map[string]int64)
+	for _, b := range result.Aggregations.Gender.Buckets {
+		if b.Key != "" {
+			gender[b.Key] = b.Count
+		}
+	}
+	interest = make(map[string]int64)
+	for _, b := range result.Aggregations.SexualPreference.Buckets {
+		if b.Key != "" {
+			interest[b.Key] = b.Count
+		}
+	}
+	return gender, interest, nil
+}
+
 func (c *Client) Delete(ctx context.Context, userID string) error {
 	req := esapi.DeleteRequest{
 		Index:      IndexName,
@@ -242,15 +389,27 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 			})
 		}
 	}
-	if f.Gender != "" {
-		must = append(must, map[string]interface{}{
-			"term": map[string]interface{}{"gender": f.Gender},
-		})
+	if len(f.Genders) > 0 {
+		if len(f.Genders) == 1 {
+			must = append(must, map[string]interface{}{
+				"term": map[string]interface{}{"gender": f.Genders[0]},
+			})
+		} else {
+			must = append(must, map[string]interface{}{
+				"terms": map[string]interface{}{"gender": f.Genders},
+			})
+		}
 	}
-	if f.Interest != "" {
-		must = append(must, map[string]interface{}{
-			"term": map[string]interface{}{"sexual_preference": f.Interest},
-		})
+	if len(f.Interests) > 0 {
+		if len(f.Interests) == 1 {
+			must = append(must, map[string]interface{}{
+				"term": map[string]interface{}{"sexual_preference": f.Interests[0]},
+			})
+		} else {
+			must = append(must, map[string]interface{}{
+				"terms": map[string]interface{}{"sexual_preference": f.Interests},
+			})
+		}
 	}
 	if f.City != "" {
 		// Partial match: "Par" -> Paris, "Amster" -> Amsterdam (case-insensitive)
@@ -265,9 +424,22 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 		})
 	}
 	if len(f.Tags) > 0 && f.StrictTags {
-		must = append(must, map[string]interface{}{
-			"terms": map[string]interface{}{"tags": f.Tags},
-		})
+		// Partial match: "mus" finds music, musician, etc. (case-insensitive)
+		for _, tag := range f.Tags {
+			tag = strings.TrimSpace(strings.ToLower(tag))
+			if tag == "" {
+				continue
+			}
+			wildcardVal := tag + "*"
+			must = append(must, map[string]interface{}{
+				"wildcard": map[string]interface{}{
+					"tags": map[string]interface{}{
+						"value":            wildcardVal,
+						"case_insensitive": true,
+					},
+				},
+			})
+		}
 	}
 	if f.MinAge > 0 {
 		maxBirth := time.Now().AddDate(-f.MinAge, 0, 0).Format("2006-01-02")

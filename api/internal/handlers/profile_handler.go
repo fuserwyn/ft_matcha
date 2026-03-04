@@ -288,14 +288,25 @@ func (h *ProfileHandler) GetViewedHistory(c *gin.Context) {
 }
 
 // TagSuggestions godoc
-// @Summary	Get tag suggestions (top tags)
+// @Summary	Get tag suggestions (top tags or prefix match, e.g. ?q=mus -> music)
 // @Tags		profile
 // @Security	BearerAuth
 // @Produce	json
+// @Param		q	query		string	false	"Tag prefix for autocomplete"
 // @Success	200	{object}	map[string]interface{}
 // @Failure	500	{object}	map[string]string
 // @Router		/api/v1/profile/tags/suggestions [get]
 func (h *ProfileHandler) TagSuggestions(c *gin.Context) {
+	q := strings.TrimSpace(strings.ToLower(c.Query("q")))
+	if q != "" {
+		tags, err := h.discoveryRepo.SearchTags(c.Request.Context(), q, 10)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"tags": tags})
+		return
+	}
 	tags, err := h.profileRepo.ListTopTags(c.Request.Context(), 20)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

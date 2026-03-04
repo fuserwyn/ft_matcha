@@ -34,7 +34,7 @@ export const profile = {
   update: (body) => api('/api/v1/profile/me', { method: 'PUT', body: JSON.stringify(body) }),
   getTags: () => api('/api/v1/profile/me/tags'),
   updateTags: (tags) => api('/api/v1/profile/me/tags', { method: 'PUT', body: JSON.stringify({ tags }) }),
-  tagSuggestions: () => api('/api/v1/profile/tags/suggestions'),
+  tagSuggestions: (q) => api(`/api/v1/profile/tags/suggestions${q ? '?q=' + encodeURIComponent(q) : ''}`),
   citySuggestions: (q) => api(`/api/v1/profile/cities/suggestions${q ? '?q=' + encodeURIComponent(q) : ''}`),
   getViewedHistory: (params = {}) => {
     const q = new URLSearchParams(params).toString()
@@ -43,6 +43,7 @@ export const profile = {
 }
 
 export const users = {
+  filterAggregations: () => api('/api/v1/users/filters/aggregations'),
   search: (params) => {
     const q = new URLSearchParams(params).toString()
     return api(`/api/v1/users${q ? '?' + q : ''}`)

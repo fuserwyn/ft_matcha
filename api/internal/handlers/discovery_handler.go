@@ -56,6 +56,32 @@ func NewDiscoveryHandler(
 	}
 }
 
+// FilterAggregations godoc
+// @Summary	Get filter counts (gender, interest) for discovery
+// @Tags		discovery
+// @Security	BearerAuth
+// @Produce	json
+// @Success	200	{object}	map[string]interface{}
+// @Failure	500	{object}	map[string]string
+// @Router		/api/v1/users/filters/aggregations [get]
+func (h *DiscoveryHandler) FilterAggregations(c *gin.Context) {
+	userID, _ := c.Get(middleware.UserIDKey)
+	id := userID.(uuid.UUID)
+	excludeIDs := []uuid.UUID{}
+	if blocked, err := h.blockRepo.ListBlockedIDs(c.Request.Context(), id); err == nil {
+		excludeIDs = blocked
+	}
+	gender, interest, err := h.discoveryRepo.FilterAggregations(c.Request.Context(), id, excludeIDs)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"gender":   gender,
+		"interest": interest,
+	})
+}
+
 // Search godoc
 // @Summary	Search users
 // @Tags		discovery
@@ -86,10 +112,10 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 			preference = *me.SexualPreference
 		}
 		if preference != "both" {
-			f.Gender = preference
+			f.Genders = []string{preference}
 		}
 		if me.Gender != nil && *me.Gender != "" {
-			f.Interest = *me.Gender
+			f.Interests = []string{*me.Gender}
 		}
 		if me.Latitude != nil && me.Longitude != nil {
 			f.UserLat = me.Latitude
@@ -103,10 +129,10 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 		}
 	}
 	if v := c.Query("gender"); v != "" {
-		f.Gender = v
+		f.Genders = parseCommaList(v)
 	}
 	if v := c.Query("interest"); v != "" {
-		f.Interest = v
+		f.Interests = parseCommaList(v)
 	}
 	if v := c.Query("min_age"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -319,4 +345,15 @@ func toUserCardResp(c *repository.UserCard) gin.H {
 		resp["longitude"] = *c.Longitude
 	}
 	return resp
+}
+
+func parseCommaList(s string) []string {
+	var out []string
+	for _, v := range strings.Split(s, ",") {
+		v = strings.TrimSpace(strings.ToLower(v))
+		if v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }
