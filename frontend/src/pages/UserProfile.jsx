@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Link, useParams, useNavigate } from 'react-router-dom'
 import { presence, users, photos } from '../api/client'
 
@@ -17,6 +17,16 @@ export default function UserProfile() {
   const [blocking, setBlocking] = useState(false)
   const [blocked, setBlocked] = useState(false)
   const [hasPrimaryPhoto, setHasPrimaryPhoto] = useState(false)
+  const [lightboxPhoto, setLightboxPhoto] = useState(null)
+
+  const closeLightbox = useCallback(() => setLightboxPhoto(null), [])
+
+  useEffect(() => {
+    if (!lightboxPhoto) return
+    const onKey = (e) => { if (e.key === 'Escape') closeLightbox() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [lightboxPhoto, closeLightbox])
 
   useEffect(() => {
     let active = true
@@ -149,10 +159,33 @@ export default function UserProfile() {
                 key={p.id}
                 src={p.url}
                 alt={`${user.first_name} ${user.last_name}`}
-                className={`w-full h-36 object-cover rounded ${p.is_primary ? 'ring-2 ring-rose-400' : ''}`}
+                className={`w-full h-36 object-cover rounded cursor-pointer ${p.is_primary ? 'ring-2 ring-rose-400' : ''}`}
                 referrerPolicy="no-referrer"
+                onClick={() => setLightboxPhoto(p.url)}
               />
             ))}
+          </div>
+        )}
+
+        {lightboxPhoto && (
+          <div
+            className="fixed inset-0 bg-black/90 flex items-center justify-center z-50"
+            onClick={closeLightbox}
+          >
+            <img
+              src={lightboxPhoto}
+              alt="Full view"
+              className="max-w-full max-h-full object-contain"
+              referrerPolicy="no-referrer"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              onClick={closeLightbox}
+              className="absolute top-4 right-4 text-white text-3xl leading-none"
+              aria-label="Close"
+            >
+              ×
+            </button>
           </div>
         )}
         <h1 className="text-2xl font-bold text-slate-800">
