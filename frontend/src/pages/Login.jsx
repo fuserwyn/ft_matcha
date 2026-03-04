@@ -1,17 +1,35 @@
-import { useState } from 'react'
-import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { Link, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { auth } from '../api/client'
 
 export default function Login() {
+  const [searchParams, setSearchParams] = useSearchParams()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
+  const [info, setInfo] = useState('')
   const [loading, setLoading] = useState(false)
   const { login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const from = location.state?.from?.pathname || '/'
+
+  useEffect(() => {
+    const u = searchParams.get('username')
+    const verified = searchParams.get('verified')
+    const err = searchParams.get('error')
+    const already = searchParams.get('already')
+    if (u) setUsername(decodeURIComponent(u))
+    if (verified === '1') setInfo('Email verified! Enter your password to sign in.')
+    if (err === 'token_required') setError('Verification link is invalid or expired.')
+    else if (err === 'verify_failed') setError('Verification failed. Please try again.')
+    else if (err === 'internal') setError('Something went wrong. Please try again.')
+    if (already === '1') setInfo('Your email is already verified. Sign in below.')
+    if (u || verified || err || already) {
+      setSearchParams({}, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -33,6 +51,11 @@ export default function Login() {
       <div className="bg-white rounded-2xl shadow-lg p-8 border border-slate-100">
         <h1 className="text-2xl font-bold text-slate-800 mb-6">Welcome back</h1>
         <form onSubmit={handleSubmit} className="space-y-4">
+          {info && (
+            <div className="bg-emerald-50 text-emerald-700 px-4 py-3 rounded-lg text-sm">
+              {info}
+            </div>
+          )}
           {error && (
             <div className="bg-rose-50 text-rose-700 px-4 py-3 rounded-lg text-sm">
               {error}
