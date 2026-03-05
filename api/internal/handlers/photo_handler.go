@@ -281,8 +281,12 @@ func (h *PhotoHandler) ServePhoto(c *gin.Context) {
 	io.Copy(c.Writer, obj)
 }
 
-// photoURL returns the stored URL directly. Real uploads use a relative /storage/... path proxied
-// through nginx to MinIO — works from any host including mobile. Seed photos use their absolute picsum URL.
-func photoURL(p *repository.Photo, _ string) string {
-	return p.URL
+// photoURL returns the URL for a photo.
+// Seed photos (objectKey starts with "seed/") use the stored absolute URL (randomuser.me CDN).
+// User-uploaded photos are proxied through the API serve endpoint so the browser never needs direct MinIO access.
+func photoURL(p *repository.Photo, apiBaseURL string) string {
+	if strings.HasPrefix(p.ObjectKey, "seed/") {
+		return p.URL
+	}
+	return apiBaseURL + "/api/v1/photos/serve/" + p.ID.String()
 }
