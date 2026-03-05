@@ -46,7 +46,6 @@ test:
 	cd api && go test ./...
 
 # Run SQL injection protection tests against the running API
-sqli-test: sqltest
 sqltest:
 	@chmod +x scripts/test_sqli.sh
 	@./scripts/test_sqli.sh
