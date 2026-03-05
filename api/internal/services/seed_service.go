@@ -3,8 +3,11 @@ package services
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
+	"net/http"
 	"strings"
 	"time"
 
@@ -17,6 +20,9 @@ type SeedService struct {
 	userRepo    *repository.UserRepository
 	profileRepo *repository.ProfileRepository
 	photoRepo   *repository.PhotoRepository
+	randomPhotoUsed map[string]struct{}
+	malePhotoCount  int
+	femalePhotoCount int
 }
 
 func NewSeedService(
@@ -24,7 +30,53 @@ func NewSeedService(
 	profileRepo *repository.ProfileRepository,
 	photoRepo *repository.PhotoRepository,
 ) *SeedService {
-	return &SeedService{userRepo: userRepo, profileRepo: profileRepo, photoRepo: photoRepo}
+	return &SeedService{
+		userRepo:         userRepo,
+		profileRepo:      profileRepo,
+		photoRepo:        photoRepo,
+		randomPhotoUsed:  map[string]struct{}{},
+		malePhotoCount:   0,
+		femalePhotoCount: 0,
+	}
+}
+
+type randomUserResult struct {
+	Name struct {
+		First string `json:"first"`
+		Last  string `json:"last"`
+	} `json:"name"`
+	Dob struct {
+		Date string `json:"date"`
+		Age  int    `json:"age"`
+	} `json:"dob"`
+	Picture struct {
+		Large string `json:"large"`
+	} `json:"picture"`
+}
+
+const uniqueRandomUserPhotoPerGender = 89
+
+func fetchRandomUsers(gender string, count int) ([]randomUserResult, error) {
+	url := fmt.Sprintf(
+		"https://randomuser.me/api/?results=%d&gender=%s&nat=us,gb,fr,de,es,au&inc=name,dob,picture&noinfo",
+		count, gender,
+	)
+	resp, err := http.Get(url) //nolint:noctx
+	if err != nil {
+		return nil, fmt.Errorf("randomuser.me request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	var payload struct {
+		Results []randomUserResult `json:"results"`
+	}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, fmt.Errorf("randomuser.me parse error: %w", err)
+	}
+	return payload.Results, nil
 }
 
 func (s *SeedService) EnsureMinimumUsers(ctx context.Context, minimum int) (int, int, error) {
@@ -41,17 +93,6 @@ func (s *SeedService) EnsureMinimumUsers(ctx context.Context, minimum int) (int,
 		return 0, totalProfiles, nil
 	}
 
-	hash, err := bcrypt.GenerateFromPassword([]byte("SeedPassw0rd!"), bcrypt.DefaultCost)
-	if err != nil {
-		return 0, totalProfiles, err
-	}
-
-	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
-	created := 0
-	totalUsers, err := s.userRepo.Count(ctx)
-	if err != nil {
-		return 0, totalProfiles, err
-	}
 	maleCount, femaleCount, err := s.profileRepo.CountByGender(ctx)
 	if err != nil {
 		return 0, totalProfiles, err
@@ -61,53 +102,80 @@ func (s *SeedService) EnsureMinimumUsers(ctx context.Context, minimum int) (int,
 	maleDeficit := maxInt(0, targetPerGender-maleCount)
 	femaleDeficit := maxInt(0, targetPerGender-femaleCount)
 
-	for i := 0; i < maleDeficit; i++ {
-		if err := s.createSeedUser(ctx, hash, rng, totalUsers+created+1, "male"); err != nil {
-			return created, totalProfiles + created, err
-		}
-		created++
-		maleCount++
-	}
-	for i := 0; i < femaleDeficit; i++ {
-		if err := s.createSeedUser(ctx, hash, rng, totalUsers+created+1, "female"); err != nil {
-			return created, totalProfiles + created, err
-		}
-		created++
-		femaleCount++
+	extra := maxInt(0, minimum-totalProfiles-maleDeficit-femaleDeficit)
+	maleDeficit += extra / 2
+	femaleDeficit += extra - extra/2
+
+	hash, err := bcrypt.GenerateFromPassword([]byte("SeedPassw0rd!"), bcrypt.DefaultCost)
+	if err != nil {
+		return 0, totalProfiles, err
 	}
 
-	for totalProfiles+created < minimum {
-		gender := "male"
-		if femaleCount < maleCount {
-			gender = "female"
+	rng := rand.New(rand.NewSource(time.Now().UnixNano()))
+	created := 0
+
+	if maleDeficit > 0 {
+		males, err := fetchRandomUsers("male", maleDeficit)
+		if err != nil {
+			return created, totalProfiles + created, fmt.Errorf("fetch males: %w", err)
 		}
-		if err := s.createSeedUser(ctx, hash, rng, totalUsers+created+1, gender); err != nil {
-			return created, totalProfiles + created, err
+		for _, u := range males {
+			if err := s.createSeedUserFromAPI(ctx, hash, rng, u, "male"); err != nil {
+				return created, totalProfiles + created, err
+			}
+			created++
 		}
-		created++
-		if gender == "male" {
-			maleCount++
-		} else {
-			femaleCount++
+	}
+
+	if femaleDeficit > 0 {
+		females, err := fetchRandomUsers("female", femaleDeficit)
+		if err != nil {
+			return created, totalProfiles + created, fmt.Errorf("fetch females: %w", err)
+		}
+		for _, u := range females {
+			if err := s.createSeedUserFromAPI(ctx, hash, rng, u, "female"); err != nil {
+				return created, totalProfiles + created, err
+			}
+			created++
 		}
 	}
 
 	return created, totalProfiles + created, nil
 }
 
-func (s *SeedService) createSeedUser(ctx context.Context, hash []byte, rng *rand.Rand, n int, gender string) error {
-	for {
-		suffix := fmt.Sprintf("%04d_%03d", n, rng.Intn(1000))
-		username := "seed_user_" + suffix
-		email := "seed_user_" + suffix + "@matcha.local"
+// europeanLocations are the cities used for all seed profiles so that
+// distance/city filters work predictably during development.
+var europeanLocations = []struct {
+	city string
+	lat  float64
+	lon  float64
+}{
+	{"Paris", 48.8566, 2.3522},
+	{"Berlin", 52.5200, 13.4050},
+	{"Madrid", 40.4168, -3.7038},
+	{"Rome", 41.9028, 12.4964},
+	{"Amsterdam", 52.3676, 4.9041},
+	{"Barcelona", 41.3851, 2.1734},
+	{"Vienna", 48.2082, 16.3738},
+	{"Munich", 48.1351, 11.5820},
+	{"Brussels", 50.8503, 4.3517},
+	{"Lisbon", 38.7169, -9.1395},
+}
 
+func (s *SeedService) createSeedUserFromAPI(ctx context.Context, hash []byte, rng *rand.Rand, ru randomUserResult, gender string) error {
+	for {
+		suffix := fmt.Sprintf("%06d", rng.Intn(1000000))
+		username := "seed_" + strings.ToLower(ru.Name.First) + "_" + suffix
+		email := username + "@matcha.local"
+
+		userID := uuid.New()
 		user := &repository.User{
-			ID:           uuid.New(),
+			ID:           userID,
 			Username:     username,
 			Email:        email,
 			PasswordHash: string(hash),
-			FirstName:    randomFirstNameByGender(rng, gender),
-			LastName:     randomLastName(rng),
+			FirstName:    ru.Name.First,
+			LastName:     ru.Name.Last,
 			EmailVerifiedAt: sql.NullTime{
 				Time:  time.Now(),
 				Valid: true,
@@ -120,13 +188,24 @@ func (s *SeedService) createSeedUser(ctx context.Context, hash []byte, rng *rand
 			return err
 		}
 
-		city, lat, lon := randomLocation(rng)
+		birthDate := time.Now().AddDate(-ru.Dob.Age, 0, 0)
+		if ru.Dob.Date != "" {
+			if t, err := time.Parse("2006-01-02T15:04:05.000Z", ru.Dob.Date); err == nil {
+				birthDate = t
+			}
+		}
+
+		// assign a random European city with slight coordinate jitter
+		loc := europeanLocations[rng.Intn(len(europeanLocations))]
+		city := loc.city
+		lat := loc.lat + (rng.Float64()-0.5)*0.08
+		lon := loc.lon + (rng.Float64()-0.5)*0.08
+
 		preference := randomFrom(rng, []string{"male", "female", "both"})
-		birthDate := time.Now().AddDate(-(18 + rng.Intn(28)), 0, -rng.Intn(365))
-		bio := fmt.Sprintf("Hi, I'm %s. I like meeting new people.", user.FirstName)
+		bio := fmt.Sprintf("Hi, I'm %s. I like meeting new people.", ru.Name.First)
 
 		profile := &repository.Profile{
-			UserID:           user.ID,
+			UserID:           userID,
 			Bio:              &bio,
 			Gender:           &gender,
 			SexualPreference: &preference,
@@ -141,63 +220,76 @@ func (s *SeedService) createSeedUser(ctx context.Context, hash []byte, rng *rand
 		}
 
 		tags := randomTags(rng)
-		if err := s.profileRepo.SetTags(ctx, user.ID, tags); err != nil {
+		if err := s.profileRepo.SetTags(ctx, userID, tags); err != nil {
 			return err
 		}
-		if err := s.createDefaultPhotos(ctx, user.ID, user.Username, rng); err != nil {
+
+		objectKey := fmt.Sprintf("seed/default/%s/01.jpg", userID.String())
+		url := s.pickSeedPhotoURL(userID, ru, gender)
+		if _, err := s.photoRepo.Create(ctx, userID, objectKey, url, true); err != nil {
 			return err
 		}
+
 		return nil
 	}
 }
 
-func (s *SeedService) createDefaultPhotos(ctx context.Context, userID uuid.UUID, username string, rng *rand.Rand) error {
-	photoCount := 1 + rng.Intn(2)
-	for i := 0; i < photoCount; i++ {
-		objectKey := fmt.Sprintf("seed/default/%s/%02d.jpg", userID.String(), i+1)
-		seed := fmt.Sprintf("%s_%02d", username, i+1)
-		url := fmt.Sprintf("https://picsum.photos/seed/%s/600/800", seed)
-		if _, err := s.photoRepo.Create(ctx, userID, objectKey, url, i == 0); err != nil {
-			return err
+func (s *SeedService) pickSeedPhotoURL(userID uuid.UUID, ru randomUserResult, gender string) string {
+	portraitURL := strings.TrimSpace(ru.Picture.Large)
+	normGender := strings.ToLower(strings.TrimSpace(gender))
+	switch normGender {
+	case "male":
+		if s.malePhotoCount < uniqueRandomUserPhotoPerGender {
+			if portraitURL != "" {
+				if _, used := s.randomPhotoUsed[portraitURL]; !used {
+					s.randomPhotoUsed[portraitURL] = struct{}{}
+					s.malePhotoCount++
+					return portraitURL
+				}
+			}
+			if nextURL, ok := s.nextUnusedRandomUserPortraitURL("male"); ok {
+				s.randomPhotoUsed[nextURL] = struct{}{}
+				s.malePhotoCount++
+				return nextURL
+			}
+		}
+	case "female":
+		if s.femalePhotoCount < uniqueRandomUserPhotoPerGender {
+			if portraitURL != "" {
+				if _, used := s.randomPhotoUsed[portraitURL]; !used {
+					s.randomPhotoUsed[portraitURL] = struct{}{}
+					s.femalePhotoCount++
+					return portraitURL
+				}
+			}
+			if nextURL, ok := s.nextUnusedRandomUserPortraitURL("female"); ok {
+				s.randomPhotoUsed[nextURL] = struct{}{}
+				s.femalePhotoCount++
+				return nextURL
+			}
 		}
 	}
-	return nil
+	// Landscape fallback for all remaining seed users after 178 unique randomuser portraits.
+	return fmt.Sprintf("https://picsum.photos/seed/landscape_%s/1200/800", userID.String())
+}
+
+func (s *SeedService) nextUnusedRandomUserPortraitURL(gender string) (string, bool) {
+	path := "men"
+	if gender == "female" {
+		path = "women"
+	}
+	for i := 0; i < 100; i++ {
+		candidate := fmt.Sprintf("https://randomuser.me/api/portraits/%s/%d.jpg", path, i)
+		if _, used := s.randomPhotoUsed[candidate]; used {
+			continue
+		}
+		return candidate, true
+	}
+	return "", false
 }
 
 func randomFrom(rng *rand.Rand, values []string) string {
 	return values[rng.Intn(len(values))]
-}
-
-func randomFirstNameByGender(rng *rand.Rand, gender string) string {
-	switch gender {
-	case "male":
-		return randomFrom(rng, []string{"Alex", "Sam", "Chris", "Leo", "Noah", "Max", "Liam", "Ethan"})
-	case "female":
-		return randomFrom(rng, []string{"Nina", "Mia", "Eva", "Anna", "Olivia", "Emma", "Luna", "Sofia"})
-	default:
-		return randomFrom(rng, []string{"Alex", "Sam", "Chris", "Nina", "Mia", "Leo", "Eva", "Noah"})
-	}
-}
-
-func randomLastName(rng *rand.Rand) string {
-	return randomFrom(rng, []string{"Smith", "Taylor", "Brown", "Miller", "Wilson", "Moore", "Davis"})
-}
-
-func randomLocation(rng *rand.Rand) (string, float64, float64) {
-	type loc struct {
-		city string
-		lat  float64
-		lon  float64
-	}
-	locations := []loc{
-		{city: "Paris", lat: 48.8566, lon: 2.3522},
-		{city: "Berlin", lat: 52.52, lon: 13.405},
-		{city: "Madrid", lat: 40.4168, lon: -3.7038},
-		{city: "Rome", lat: 41.9028, lon: 12.4964},
-		{city: "Amsterdam", lat: 52.3676, lon: 4.9041},
-	}
-	l := locations[rng.Intn(len(locations))]
-	return l.city, l.lat + (rng.Float64()-0.5)*0.1, l.lon + (rng.Float64()-0.5)*0.1
 }
 
 func randomTags(rng *rand.Rand) []string {
