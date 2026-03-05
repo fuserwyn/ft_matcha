@@ -43,8 +43,13 @@ type rateState struct {
 }
 
 type incomingMessage struct {
-	ToUserID string `json:"to_user_id"`
-	Content  string `json:"content"`
+	Type      string `json:"type"`
+	ToUserID  string `json:"to_user_id"`
+	Content   string `json:"content"`
+	CallID    string `json:"call_id"`
+	Mode      string `json:"mode"`
+	SDP       string `json:"sdp"`
+	Candidate any    `json:"candidate"`
 }
 
 func NewChatHandler(
@@ -123,18 +128,21 @@ func (h *ChatHandler) Handle(c *gin.Context) {
 }
 
 func (h *ChatHandler) processIncoming(fromUserID uuid.UUID, in incomingMessage) error {
+	kind := strings.ToLower(strings.TrimSpace(in.Type))
+	if kind == "" || kind == "message" {
+		return h.processChatMessage(fromUserID, in)
+	}
+	return h.processCallSignal(fromUserID, in, kind)
+}
+
+func (h *ChatHandler) processChatMessage(fromUserID uuid.UUID, in incomingMessage) error {
 	if !h.allowMessage(fromUserID) {
 		return errors.New("rate limit exceeded: too many messages")
 	}
-
-	toUserID, err := uuid.Parse(strings.TrimSpace(in.ToUserID))
+	toUserID, err := h.validateMatchAndBlock(fromUserID, in.ToUserID)
 	if err != nil {
-		return errors.New("invalid to_user_id")
+		return err
 	}
-	if toUserID == fromUserID {
-		return errors.New("cannot message yourself")
-	}
-
 	content := strings.TrimSpace(in.Content)
 	if len(content) == 0 || len(content) > 2000 {
 		return errors.New("content must be 1-2000 characters")
@@ -142,21 +150,6 @@ func (h *ChatHandler) processIncoming(fromUserID uuid.UUID, in incomingMessage) 
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-
-	isMatch, err := h.likeRepo.IsMatch(ctx, fromUserID, toUserID)
-	if err != nil {
-		return err
-	}
-	if !isMatch {
-		return errors.New("can only message matches")
-	}
-	isBlocked, err := h.blockRepo.IsBlockedEither(ctx, fromUserID, toUserID)
-	if err != nil {
-		return err
-	}
-	if isBlocked {
-		return errors.New("cannot message blocked user")
-	}
 
 	msg, err := h.messageRepo.Create(ctx, fromUserID, toUserID, content)
 	if err != nil {
@@ -183,16 +176,17 @@ func (h *ChatHandler) processIncoming(fromUserID uuid.UUID, in incomingMessage) 
 	event := gin.H{
 		"type": "message",
 		"data": gin.H{
-			"id":          msg.ID,
-			"sender_id":   msg.SenderID,
-			"receiver_id": msg.ReceiverID,
-			"content":     msg.Content,
-			"created_at":  msg.CreatedAt,
-			"is_read":     msg.IsRead,
-			"read_at":     msg.ReadAt,
+			"id":           msg.ID,
+			"sender_id":    msg.SenderID,
+			"receiver_id":  msg.ReceiverID,
+			"content":      msg.Content,
+			"message_type": msg.MessageType,
+			"media_url":    msg.MediaURL,
+			"created_at":   msg.CreatedAt,
+			"is_read":      msg.IsRead,
+			"read_at":      msg.ReadAt,
 		},
 	}
-
 	h.hub.SendToUser(fromUserID, event)
 	h.hub.SendToUser(toUserID, event)
 	if notif != nil {
@@ -212,6 +206,81 @@ func (h *ChatHandler) processIncoming(fromUserID uuid.UUID, in incomingMessage) 
 		})
 	}
 	return nil
+}
+
+func (h *ChatHandler) processCallSignal(fromUserID uuid.UUID, in incomingMessage, kind string) error {
+	toUserID, err := h.validateMatchAndBlock(fromUserID, in.ToUserID)
+	if err != nil {
+		return err
+	}
+	callID := strings.TrimSpace(in.CallID)
+	if callID == "" {
+		return errors.New("call_id is required")
+	}
+	mode := strings.ToLower(strings.TrimSpace(in.Mode))
+	if mode == "" {
+		mode = "video"
+	}
+	if mode != "video" && mode != "audio" {
+		return errors.New("mode must be video or audio")
+	}
+
+	switch kind {
+	case "call_invite", "call_accept":
+		if strings.TrimSpace(in.SDP) == "" {
+			return errors.New("sdp is required")
+		}
+	case "call_ice":
+		if in.Candidate == nil {
+			return errors.New("candidate is required")
+		}
+	case "call_reject", "call_end":
+		// no extra payload
+	default:
+		return errors.New("unsupported event type")
+	}
+
+	event := gin.H{
+		"type": kind,
+		"data": gin.H{
+			"call_id":      callID,
+			"from_user_id": fromUserID,
+			"to_user_id":   toUserID,
+			"mode":         mode,
+			"sdp":          in.SDP,
+			"candidate":    in.Candidate,
+		},
+	}
+	h.hub.SendToUser(fromUserID, event)
+	h.hub.SendToUser(toUserID, event)
+	return nil
+}
+
+func (h *ChatHandler) validateMatchAndBlock(fromUserID uuid.UUID, toUserIDRaw string) (uuid.UUID, error) {
+	toUserID, err := uuid.Parse(strings.TrimSpace(toUserIDRaw))
+	if err != nil {
+		return uuid.Nil, errors.New("invalid to_user_id")
+	}
+	if toUserID == fromUserID {
+		return uuid.Nil, errors.New("cannot message yourself")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	isMatch, err := h.likeRepo.IsMatch(ctx, fromUserID, toUserID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if !isMatch {
+		return uuid.Nil, errors.New("can only message matches")
+	}
+	isBlocked, err := h.blockRepo.IsBlockedEither(ctx, fromUserID, toUserID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if isBlocked {
+		return uuid.Nil, errors.New("cannot message blocked user")
+	}
+	return toUserID, nil
 }
 
 func (h *ChatHandler) authenticate(c *gin.Context) (uuid.UUID, error) {

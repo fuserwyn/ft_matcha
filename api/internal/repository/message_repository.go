@@ -18,30 +18,36 @@ type MessageRepository struct {
 }
 
 type Message struct {
-	ID         uuid.UUID
-	SenderID   uuid.UUID
-	ReceiverID uuid.UUID
-	Content    string
-	CreatedAt  time.Time
-	IsRead     bool
-	ReadAt     *time.Time
+	ID          uuid.UUID
+	SenderID    uuid.UUID
+	ReceiverID  uuid.UUID
+	Content     string
+	MessageType string
+	MediaURL    *string
+	CreatedAt   time.Time
+	IsRead      bool
+	ReadAt      *time.Time
 }
 
 func (r *MessageRepository) Create(ctx context.Context, senderID, receiverID uuid.UUID, content string) (*Message, error) {
+	return r.CreateWithMeta(ctx, senderID, receiverID, content, "text", nil)
+}
+
+func (r *MessageRepository) CreateWithMeta(ctx context.Context, senderID, receiverID uuid.UUID, content string, messageType string, mediaURL *string) (*Message, error) {
 	var m Message
 	err := r.pool.QueryRow(ctx, `
-		INSERT INTO messages (sender_id, receiver_id, content)
-		VALUES ($1, $2, $3)
-		RETURNING id, sender_id, receiver_id, content, created_at, is_read, read_at
-	`, senderID, receiverID, content).Scan(
-		&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.CreatedAt, &m.IsRead, &m.ReadAt,
+		INSERT INTO messages (sender_id, receiver_id, content, message_type, media_url)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, sender_id, receiver_id, content, message_type, media_url, created_at, is_read, read_at
+	`, senderID, receiverID, content, messageType, mediaURL).Scan(
+		&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.MessageType, &m.MediaURL, &m.CreatedAt, &m.IsRead, &m.ReadAt,
 	)
 	return &m, err
 }
 
 func (r *MessageRepository) GetBetween(ctx context.Context, userID, otherUserID uuid.UUID, limit, offset int) ([]Message, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, sender_id, receiver_id, content, created_at, is_read, read_at
+		SELECT id, sender_id, receiver_id, content, message_type, media_url, created_at, is_read, read_at
 		FROM messages
 		WHERE (sender_id = $1 AND receiver_id = $2) OR (sender_id = $2 AND receiver_id = $1)
 		ORDER BY created_at ASC
@@ -56,7 +62,7 @@ func (r *MessageRepository) GetBetween(ctx context.Context, userID, otherUserID 
 	for rows.Next() {
 		var m Message
 		var readAt sql.NullTime
-		if err := rows.Scan(&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.CreatedAt, &m.IsRead, &readAt); err != nil {
+		if err := rows.Scan(&m.ID, &m.SenderID, &m.ReceiverID, &m.Content, &m.MessageType, &m.MediaURL, &m.CreatedAt, &m.IsRead, &readAt); err != nil {
 			return nil, err
 		}
 		if readAt.Valid {
