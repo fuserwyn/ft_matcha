@@ -153,20 +153,20 @@ func (c *Client) SearchCities(ctx context.Context, prefix string, limit int) ([]
 				"filter": []map[string]interface{}{
 					{
 						"prefix": map[string]interface{}{
-							"city": map[string]interface{}{
+							"city.keyword": map[string]interface{}{
 								"value":            prefix,
 								"case_insensitive": true,
 							},
 						},
 					},
-					{"exists": map[string]interface{}{"field": "city"}},
+					{"exists": map[string]interface{}{"field": "city.keyword"}},
 				},
 			},
 		},
 		"aggs": map[string]interface{}{
 			"cities": map[string]interface{}{
 				"terms": map[string]interface{}{
-					"field": "city",
+					"field": "city.keyword",
 					"size":  limit,
 					"order": map[string]interface{}{"_key": "asc"},
 				},

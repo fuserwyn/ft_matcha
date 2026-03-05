@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { users, profile } from '../api/client'
+import { users } from '../api/client'
+import CityInput from '../components/CityInput'
 
 const GENDERS = ['male', 'female', 'non-binary', 'other']
 const INTERESTS = ['male', 'female', 'both', 'other']
@@ -9,7 +10,6 @@ export default function Discovery() {
   const [list, setList] = useState([])
   const [loading, setLoading] = useState(true)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [citySuggestions, setCitySuggestions] = useState([])
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [tagSuggestionsOpen, setTagSuggestionsOpen] = useState(false)
   const [aggregations, setAggregations] = useState({ gender: {}, interest: {} })
@@ -55,18 +55,6 @@ export default function Discovery() {
       setLoading(false)
     }
   }
-
-  useEffect(() => {
-    const q = filters.city.trim()
-    if (q.length < 2) {
-      setCitySuggestions([])
-      return
-    }
-    const t = setTimeout(() => {
-      profile.citySuggestions(q).then((r) => setCitySuggestions(r.cities || [])).catch(() => setCitySuggestions([]))
-    }, 200)
-    return () => clearTimeout(t)
-  }, [filters.city])
 
   useEffect(() => {
     const lastComma = filters.tags.lastIndexOf(',')
@@ -134,7 +122,7 @@ export default function Discovery() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-5">
         <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Discover</h1>
         <button
           type="button"
@@ -145,253 +133,286 @@ export default function Discovery() {
         </button>
       </div>
 
-      <div className={`mb-6 p-4 bg-white rounded-lg border border-slate-200 ${filtersOpen ? 'block' : 'hidden lg:block'}`}>
-        <p className="text-sm font-medium text-slate-700 mb-3">Filters</p>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Gender</label>
-            <div className="flex flex-wrap gap-2">
-              {GENDERS.map((g) => (
-                <label key={g} className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={filters.genders?.includes(g) || false}
-                    onChange={() => toggleGender(g)}
-                    className="rounded border-slate-300 text-rose-500 focus:ring-rose-400"
-                  />
-                  <span className="text-sm">
-                    {g}
-                    {aggregations.gender[g] != null && (
-                      <span className="text-slate-400 ml-0.5">({aggregations.gender[g]})</span>
-                    )}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Looking for</label>
-            <div className="flex flex-wrap gap-2">
-              {INTERESTS.map((i) => (
-                <label key={i} className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={filters.interests?.includes(i) || false}
-                    onChange={() => toggleInterest(i)}
-                    className="rounded border-slate-300 text-rose-500 focus:ring-rose-400"
-                  />
-                  <span className="text-sm">
-                    {i}
-                    {aggregations.interest[i] != null && (
-                      <span className="text-slate-400 ml-0.5">({aggregations.interest[i]})</span>
-                    )}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Min age</label>
-            <input
-              type="number"
-              name="min_age"
-              value={filters.min_age}
-              onChange={handleFilterChange}
-              min="18"
-              max="99"
-              placeholder="18"
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Max age</label>
-            <input
-              type="number"
-              name="max_age"
-              value={filters.max_age}
-              onChange={handleFilterChange}
-              min="18"
-              max="99"
-              placeholder="99"
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Min fame</label>
-            <input
-              type="number"
-              name="min_fame"
-              value={filters.min_fame}
-              onChange={handleFilterChange}
-              min="0"
-              placeholder="0"
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Max fame</label>
-            <input
-              type="number"
-              name="max_fame"
-              value={filters.max_fame}
-              onChange={handleFilterChange}
-              min="0"
-              placeholder="100"
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">City</label>
-            <input
-              type="text"
-              name="city"
-              value={filters.city}
-              onChange={handleFilterChange}
-              placeholder="Par, Amster, Paris..."
-              list="city-suggestions"
-              autoComplete="off"
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
-            />
-            <datalist id="city-suggestions">
-              {citySuggestions.map((c) => (
-                <option key={c} value={c} />
-              ))}
-            </datalist>
-          </div>
-          <div className="relative">
-            <label className="block text-xs text-slate-500 mb-1">Tags (comma, partial: mus → music)</label>
-            <input
-              type="text"
-              name="tags"
-              value={filters.tags}
-              onChange={handleFilterChange}
-              onBlur={() => setTimeout(() => setTagSuggestionsOpen(false), 150)}
-              onFocus={() => tagSuggestions.length > 0 && setTagSuggestionsOpen(true)}
-              placeholder="music, travel, mus..."
-              autoComplete="off"
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
-            />
-            {tagSuggestionsOpen && tagSuggestions.length > 0 && (
-              <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-auto">
-                {tagSuggestions.map((t) => (
-                  <button
-                    key={t}
-                    type="button"
-                    className="block w-full text-left px-3 py-2 text-sm hover:bg-rose-50"
-                    onClick={() => applyTagSuggestion(t)}
-                  >
-                    {t}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Max distance (km)</label>
-            <input
-              type="number"
-              name="max_distance_km"
-              value={filters.max_distance_km}
-              onChange={handleFilterChange}
-              min="1"
-              placeholder="50"
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Sort by</label>
-            <select
-              name="sort_by"
-              value={filters.sort_by}
-              onChange={handleFilterChange}
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
-            >
-              <option value="">Relevance</option>
-              <option value="age">Age</option>
-              <option value="location">Location</option>
-              <option value="fame">Fame</option>
-              <option value="tags">Tags</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 mb-1">Sort order</label>
-            <select
-              name="sort_order"
-              value={filters.sort_order}
-              onChange={handleFilterChange}
-              className="w-full px-3 py-2 rounded border border-slate-200 text-sm"
-            >
-              <option value="">Default</option>
-              <option value="asc">ASC</option>
-              <option value="desc">DESC</option>
-            </select>
-          </div>
-        </div>
-      </div>
+      <div className="lg:flex lg:gap-6 lg:items-start">
 
-      {loading ? (
-        <div className="flex justify-center py-12">
-          <div className="animate-spin w-10 h-10 border-2 border-rose-400 border-t-transparent rounded-full" />
-        </div>
-      ) : list.length === 0 ? (
-        <p className="text-slate-500 text-center py-12">No users found</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {list.map((u) => {
-            const displayName = (u.first_name && u.last_name && u.first_name === u.last_name)
-              ? u.first_name
-              : [u.first_name, u.last_name].filter(Boolean).join(' ')
-            return (
-            <Link
-              key={u.id}
-              to={`/users/${u.id}`}
-              className="block p-4 bg-white rounded-xl border border-slate-200 hover:border-rose-300 hover:shadow-md transition active:scale-[0.99]"
-            >
-              {u.primary_photo_url ? (
-                <img
-                  src={u.primary_photo_url}
-                  alt={displayName}
-                  className="w-full h-40 sm:h-36 object-cover rounded-lg mb-3"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <div className="w-full h-40 sm:h-36 bg-slate-100 rounded-lg mb-3 flex items-center justify-center text-slate-400 text-sm">
-                  No photo
-                </div>
-              )}
-              <div className="font-semibold text-slate-800 truncate">
-                {displayName || u.username}
-              </div>
-              <div className="text-sm text-slate-500">@{u.username}</div>
-              {u.gender && (
-                <span className="text-xs text-slate-500">{u.gender}</span>
-              )}
-              {u.birth_date && (
-                <span className="text-xs text-slate-500 ml-2">
-                  {age(u.birth_date)} y.o.
-                </span>
-              )}
-              {u.bio && (
-                <p className="mt-2 text-sm text-slate-600 line-clamp-2 break-words">{u.bio}</p>
-              )}
-              {u.fame_rating > 0 && (
-                <div className="mt-2 text-xs text-rose-500">★ {u.fame_rating}</div>
-              )}
-              {u.city && <div className="mt-1 text-xs text-slate-500">City: {u.city}</div>}
-              {Array.isArray(u.tags) && u.tags.length > 0 && (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {u.tags.slice(0, 4).map((tag) => (
-                    <span key={tag} className="text-[11px] px-2 py-0.5 bg-slate-100 rounded text-slate-600">
-                      #{tag}
-                    </span>
+        {/* ── Sidebar filters ── */}
+        <aside className={`lg:w-72 xl:w-80 shrink-0 mb-6 lg:mb-0 lg:sticky lg:top-20 ${filtersOpen ? 'block' : 'hidden lg:block'}`}>
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
+              <p className="text-sm font-semibold text-slate-700">Filters</p>
+            </div>
+
+            <div className="p-4 space-y-5">
+
+              {/* Gender */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Gender</p>
+                <div className="flex flex-wrap gap-2">
+                  {GENDERS.map((g) => (
+                    <label key={g} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-sm cursor-pointer transition ${
+                      filters.genders?.includes(g)
+                        ? 'border-rose-400 bg-rose-50 text-rose-700'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={filters.genders?.includes(g) || false}
+                        onChange={() => toggleGender(g)}
+                        className="sr-only"
+                      />
+                      {g}
+                      {aggregations.gender[g] != null && (
+                        <span className="text-xs opacity-60">({aggregations.gender[g]})</span>
+                      )}
+                    </label>
                   ))}
                 </div>
-              )}
-            </Link>
-            )
-          })}
+              </div>
+
+              {/* Looking for */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Looking for</p>
+                <div className="flex flex-wrap gap-2">
+                  {INTERESTS.map((i) => (
+                    <label key={i} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-sm cursor-pointer transition ${
+                      filters.interests?.includes(i)
+                        ? 'border-rose-400 bg-rose-50 text-rose-700'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}>
+                      <input
+                        type="checkbox"
+                        checked={filters.interests?.includes(i) || false}
+                        onChange={() => toggleInterest(i)}
+                        className="sr-only"
+                      />
+                      {i}
+                      {aggregations.interest[i] != null && (
+                        <span className="text-xs opacity-60">({aggregations.interest[i]})</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Age range */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Age</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">From</label>
+                    <input
+                      type="number"
+                      name="min_age"
+                      value={filters.min_age}
+                      onChange={handleFilterChange}
+                      min="18" max="99"
+                      placeholder="18"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">To</label>
+                    <input
+                      type="number"
+                      name="max_age"
+                      value={filters.max_age}
+                      onChange={handleFilterChange}
+                      min="18" max="99"
+                      placeholder="99"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Fame range */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Fame rating</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Min</label>
+                    <input
+                      type="number"
+                      name="min_fame"
+                      value={filters.min_fame}
+                      onChange={handleFilterChange}
+                      min="0"
+                      placeholder="0"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Max</label>
+                    <input
+                      type="number"
+                      name="max_fame"
+                      value={filters.max_fame}
+                      onChange={handleFilterChange}
+                      min="0"
+                      placeholder="100"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* City */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">City</p>
+                <CityInput
+                  value={filters.city}
+                  onChange={(val) => setFilters((f) => ({ ...f, city: val }))}
+                  placeholder="Paris, Amsterdam..."
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
+                />
+              </div>
+
+              {/* Tags */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tags</p>
+                <div className="relative">
+                  <input
+                    type="text"
+                    name="tags"
+                    value={filters.tags}
+                    onChange={handleFilterChange}
+                    onBlur={() => setTimeout(() => setTagSuggestionsOpen(false), 150)}
+                    onFocus={() => tagSuggestions.length > 0 && setTagSuggestionsOpen(true)}
+                    placeholder="music, travel..."
+                    autoComplete="off"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
+                  />
+                  {tagSuggestionsOpen && tagSuggestions.length > 0 && (
+                    <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-auto">
+                      {tagSuggestions.map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          className="block w-full text-left px-3 py-2 text-sm hover:bg-rose-50"
+                          onClick={() => applyTagSuggestion(t)}
+                        >
+                          {t}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Distance */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Max distance (km)</p>
+                <input
+                  type="number"
+                  name="max_distance_km"
+                  value={filters.max_distance_km}
+                  onChange={handleFilterChange}
+                  min="1"
+                  placeholder="50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
+                />
+              </div>
+
+              {/* Sort */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Sort</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    name="sort_by"
+                    value={filters.sort_by}
+                    onChange={handleFilterChange}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
+                  >
+                    <option value="">Relevance</option>
+                    <option value="age">Age</option>
+                    <option value="location">Location</option>
+                    <option value="fame">Fame</option>
+                    <option value="tags">Tags</option>
+                  </select>
+                  <select
+                    name="sort_order"
+                    value={filters.sort_order}
+                    onChange={handleFilterChange}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
+                  >
+                    <option value="">Default</option>
+                    <option value="asc">ASC</option>
+                    <option value="desc">DESC</option>
+                  </select>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </aside>
+
+        {/* ── Results grid ── */}
+        <div className="flex-1 min-w-0">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <div className="animate-spin w-10 h-10 border-2 border-rose-400 border-t-transparent rounded-full" />
+            </div>
+          ) : list.length === 0 ? (
+            <p className="text-slate-500 text-center py-12">No users found</p>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
+              {list.map((u) => {
+                const displayName = (u.first_name && u.last_name && u.first_name === u.last_name)
+                  ? u.first_name
+                  : [u.first_name, u.last_name].filter(Boolean).join(' ')
+                const initial = (u.first_name?.[0] || u.username?.[0] || '?').toUpperCase()
+                return (
+                  <Link
+                    key={u.id}
+                    to={`/users/${u.id}`}
+                    className="group relative block rounded-2xl overflow-hidden aspect-[3/4] bg-slate-100 hover:shadow-xl transition-shadow active:scale-[0.98]"
+                  >
+                    {u.primary_photo_url ? (
+                      <img
+                        src={u.primary_photo_url}
+                        alt={displayName}
+                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
+                        <span className="text-7xl font-bold text-slate-300">{initial}</span>
+                      </div>
+                    )}
+                    {/* gradient overlay */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                    {/* fame badge */}
+                    {u.fame_rating > 0 && (
+                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/40 backdrop-blur-sm text-amber-300 text-xs font-semibold">
+                        ★ {u.fame_rating}
+                      </div>
+                    )}
+                    {/* info overlay */}
+                    <div className="absolute bottom-0 inset-x-0 p-4 text-white">
+                      <div className="font-bold text-lg leading-tight truncate drop-shadow">
+                        {displayName || u.username}{u.birth_date ? `, ${age(u.birth_date)}` : ''}
+                      </div>
+                      {u.city && (
+                        <div className="text-xs text-white/80 mt-0.5 truncate">📍 {u.city}</div>
+                      )}
+                      {Array.isArray(u.tags) && u.tags.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {u.tags.slice(0, 3).map((tag) => (
+                            <span key={tag} className="text-[10px] px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded-full">
+                              #{tag}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          )}
         </div>
-      )}
+
+      </div>
     </div>
   )
 }

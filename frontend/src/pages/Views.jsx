@@ -70,41 +70,32 @@ export default function Views() {
           {isByMe ? 'No profiles viewed yet.' : 'No one has viewed your profile yet.'}
         </p>
       ) : (
-        <div className="space-y-3">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-4">
           {items.map((u) => (
-            <div
-              key={u.id}
-              className="bg-white rounded-lg border border-slate-200 p-4 flex items-center justify-between gap-3"
-            >
-              <div className="flex items-center gap-3">
-                {u.primary_photo_url ? (
-                  <img
-                    src={u.primary_photo_url}
-                    alt={`${u.first_name} ${u.last_name}`}
-                    className="w-14 h-14 object-cover rounded-full shrink-0"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-14 h-14 rounded-full bg-slate-200 shrink-0 flex items-center justify-center text-slate-500 text-lg font-medium">
-                    {(u.first_name?.[0] || u.username?.[0] || '?').toUpperCase()}
-                  </div>
-                )}
-                <div>
-                  <p className="font-semibold text-slate-800">
-                    {u.first_name} {u.last_name}
-                  </p>
-                  <p className="text-sm text-slate-500">@{u.username}</p>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    {isByMe ? 'Viewed' : 'Viewed you'} {new Date(u.last_viewed_at).toLocaleString()}
-                  </p>
+            <div key={u.id} className="group relative rounded-2xl overflow-hidden aspect-[3/4] bg-slate-100 hover:shadow-xl transition-shadow">
+              {u.primary_photo_url ? (
+                <img
+                  src={u.primary_photo_url}
+                  alt={`${u.first_name} ${u.last_name}`}
+                  className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
+                  <span className="text-7xl font-bold text-slate-300">{(u.first_name?.[0] || u.username?.[0] || '?').toUpperCase()}</span>
                 </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+              <div className="absolute bottom-0 inset-x-0 p-4 text-white">
+                <p className="font-bold text-lg leading-tight truncate drop-shadow">{u.first_name} {u.last_name}</p>
+                <p className="text-xs text-white/60 mb-3">
+                  {isByMe ? 'Viewed' : 'Viewed you'} · {new Date(u.last_viewed_at).toLocaleString()}
+                </p>
+                <Link to={`/users/${u.id}`}
+                  className="inline-block px-4 py-1.5 rounded-full bg-white/20 backdrop-blur-sm text-xs text-white hover:bg-white/30 transition">
+                  View profile
+                </Link>
               </div>
-              <Link
-                to={`/users/${u.id}`}
-                className="px-3 py-2 rounded bg-rose-500 text-sm text-white hover:bg-rose-600"
-              >
-                View profile
-              </Link>
             </div>
           ))}
         </div>
