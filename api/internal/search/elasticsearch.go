@@ -412,8 +412,12 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 		}
 	}
 	if f.City != "" {
-		// Partial match: "Par" -> Paris, "Amster" -> Amsterdam (case-insensitive)
-		wildcardVal := strings.TrimSpace(f.City) + "*"
+		// Use only the city name part (before any comma) — the autocomplete may send "Paris, Île-de-France, France"
+		cityName := strings.TrimSpace(f.City)
+		if idx := strings.Index(cityName, ","); idx != -1 {
+			cityName = strings.TrimSpace(cityName[:idx])
+		}
+		wildcardVal := cityName + "*"
 		must = append(must, map[string]interface{}{
 			"wildcard": map[string]interface{}{
 				"city": map[string]interface{}{

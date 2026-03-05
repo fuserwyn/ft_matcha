@@ -33,7 +33,7 @@ export default function CityInput({ value, onChange, placeholder = 'Paris, Amste
               const { name = '', state = '', country = '' } = f.properties
               const parts = [name, state, country].filter(Boolean)
               const label = parts.join(', ')
-              return { name: label, label }
+              return { name, label }
             })
             .filter(({ label }) => {
               if (!label || seen.has(label)) return false
