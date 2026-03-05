@@ -241,7 +241,7 @@ export default function UserProfile() {
                 {others.map((p, i) => (
                   <div
                     key={p.id}
-                    className="overflow-hidden rounded-xl cursor-pointer group"
+                    className="overflow-hidden rounded-2xl cursor-pointer group"
                     onClick={() => openLightbox(allPhotos.indexOf(p))}
                   >
                     <img

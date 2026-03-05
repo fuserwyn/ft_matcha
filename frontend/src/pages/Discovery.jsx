@@ -1,80 +1,108 @@
-import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
-import { users } from '../api/client'
+import { useState, useEffect, useRef } from 'react'
+import { users, profile } from '../api/client'
 import CityInput from '../components/CityInput'
+import ProfileModal from '../components/ProfileModal'
 
 const GENDERS = ['male', 'female', 'non-binary', 'other']
 const INTERESTS = ['male', 'female', 'both', 'other']
 
+// Module-level cache — survives React unmount/remount within the same session
+let cache = null
+
+const defaultFilters = {
+  genders: [],
+  interests: [],
+  min_age: '',
+  max_age: '',
+  min_fame: '',
+  max_fame: '',
+  city: '',
+  tags: '',
+  max_distance_km: '',
+  sort_by: '',
+  sort_order: '',
+}
+
 export default function Discovery() {
-  const [list, setList] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [list, setList] = useState(() => cache?.list || [])
+  const [loading, setLoading] = useState(!cache)
+  const [selectedUserId, setSelectedUserId] = useState(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [tagSuggestionsOpen, setTagSuggestionsOpen] = useState(false)
   const [aggregations, setAggregations] = useState({ gender: {}, interest: {} })
-  const [filters, setFilters] = useState({
-    genders: [],
-    interests: [],
-    min_age: '',
-    max_age: '',
-    min_fame: '',
-    max_fame: '',
-    city: '',
-    tags: '',
-    max_distance_km: '',
-    sort_by: '',
-    sort_order: '',
+  const [filters, setFilters] = useState(() => cache?.filters || defaultFilters)
+
+  // pendingScroll: set when restoring from cache, consumed once list renders
+  const pendingScroll = useRef(cache?.scrollY ?? null)
+  // Track if filters changed by user (vs. initial mount)
+  const initialMount = useRef(true)
+
+  // Scroll to saved position once the list is rendered
+  useEffect(() => {
+    if (pendingScroll.current !== null && list.length > 0) {
+      const y = pendingScroll.current
+      pendingScroll.current = null
+      // Double rAF ensures the DOM has fully painted
+      requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)))
+    }
+  }, [list])
+
+  // Save to cache on unmount
+  useEffect(() => {
+    return () => {
+      cache = {
+        list,
+        filters,
+        scrollY: window.scrollY,
+      }
+    }
   })
 
   useEffect(() => {
-    users.filterAggregations().then((r) => setAggregations({ gender: r.gender || {}, interest: r.interest || {} })).catch(() => {})
+    users.filterAggregations()
+      .then((r) => setAggregations({ gender: r.gender || {}, interest: r.interest || {} }))
+      .catch(() => {})
   }, [])
 
-  const load = async () => {
+  const load = async (f) => {
     setLoading(true)
     try {
       const params = {}
-      if (filters.genders?.length > 0) params.gender = filters.genders.join(',')
-      if (filters.interests?.length > 0) params.interest = filters.interests.join(',')
-      if (filters.min_age) params.min_age = filters.min_age
-      if (filters.max_age) params.max_age = filters.max_age
-      if (filters.min_fame) params.min_fame = filters.min_fame
-      if (filters.max_fame) params.max_fame = filters.max_fame
-      if (filters.city) params.city = filters.city
-      if (filters.tags) params.tags = filters.tags
-      if (filters.max_distance_km) params.max_distance_km = filters.max_distance_km
-      if (filters.sort_by) params.sort_by = filters.sort_by
-      if (filters.sort_order) params.sort_order = filters.sort_order
+      if (f.genders?.length > 0) params.gender = f.genders.join(',')
+      if (f.interests?.length > 0) params.interest = f.interests.join(',')
+      if (f.min_age) params.min_age = f.min_age
+      if (f.max_age) params.max_age = f.max_age
+      if (f.min_fame) params.min_fame = f.min_fame
+      if (f.max_fame) params.max_fame = f.max_fame
+      if (f.city) params.city = f.city
+      if (f.tags) params.tags = f.tags
+      if (f.max_distance_km) params.max_distance_km = f.max_distance_km
+      if (f.sort_by) params.sort_by = f.sort_by
+      if (f.sort_order) params.sort_order = f.sort_order
       params.limit = 500
       const data = await users.search(params)
       setList(data)
-    } catch (err) {
+    } catch {
       setList([])
     } finally {
       setLoading(false)
     }
   }
 
+  // Initial load — only if no cache
   useEffect(() => {
-    const lastComma = filters.tags.lastIndexOf(',')
-    const prefix = (lastComma >= 0 ? filters.tags.slice(lastComma + 1) : filters.tags).trim().toLowerCase()
-    if (prefix.length < 2) {
-      setTagSuggestions([])
-      setTagSuggestionsOpen(false)
+    if (!cache) load(filters)
+  }, [])
+
+  // Reload when filters change (skip initial mount)
+  useEffect(() => {
+    if (initialMount.current) {
+      initialMount.current = false
       return
     }
-    const t = setTimeout(() => {
-      profile.tagSuggestions(prefix).then((r) => {
-        setTagSuggestions(r.tags || [])
-        setTagSuggestionsOpen(true)
-      }).catch(() => setTagSuggestions([]))
-    }, 200)
-    return () => clearTimeout(t)
-  }, [filters.tags])
-
-  useEffect(() => {
-    load()
+    pendingScroll.current = null // user changed filters, don't restore old scroll
+    load(filters)
   }, [
     filters.genders,
     filters.interests,
@@ -88,6 +116,23 @@ export default function Discovery() {
     filters.sort_by,
     filters.sort_order,
   ])
+
+  // Tag suggestions
+  useEffect(() => {
+    const lastComma = filters.tags.lastIndexOf(',')
+    const prefix = (lastComma >= 0 ? filters.tags.slice(lastComma + 1) : filters.tags).trim().toLowerCase()
+    if (prefix.length < 2) {
+      setTagSuggestions([])
+      setTagSuggestionsOpen(false)
+      return
+    }
+    const t = setTimeout(() => {
+      profile.tagSuggestions(prefix)
+        .then((r) => { setTagSuggestions(r.tags || []); setTagSuggestionsOpen(true) })
+        .catch(() => setTagSuggestions([]))
+    }, 200)
+    return () => clearTimeout(t)
+  }, [filters.tags])
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target
@@ -154,12 +199,8 @@ export default function Discovery() {
                         ? 'border-rose-400 bg-rose-50 text-rose-700'
                         : 'border-slate-200 text-slate-600 hover:border-slate-300'
                     }`}>
-                      <input
-                        type="checkbox"
-                        checked={filters.genders?.includes(g) || false}
-                        onChange={() => toggleGender(g)}
-                        className="sr-only"
-                      />
+                      <input type="checkbox" checked={filters.genders?.includes(g) || false}
+                        onChange={() => toggleGender(g)} className="sr-only" />
                       {g}
                       {aggregations.gender[g] != null && (
                         <span className="text-xs opacity-60">({aggregations.gender[g]})</span>
@@ -179,12 +220,8 @@ export default function Discovery() {
                         ? 'border-rose-400 bg-rose-50 text-rose-700'
                         : 'border-slate-200 text-slate-600 hover:border-slate-300'
                     }`}>
-                      <input
-                        type="checkbox"
-                        checked={filters.interests?.includes(i) || false}
-                        onChange={() => toggleInterest(i)}
-                        className="sr-only"
-                      />
+                      <input type="checkbox" checked={filters.interests?.includes(i) || false}
+                        onChange={() => toggleInterest(i)} className="sr-only" />
                       {i}
                       {aggregations.interest[i] != null && (
                         <span className="text-xs opacity-60">({aggregations.interest[i]})</span>
@@ -200,27 +237,15 @@ export default function Discovery() {
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs text-slate-400 mb-1">From</label>
-                    <input
-                      type="number"
-                      name="min_age"
-                      value={filters.min_age}
-                      onChange={handleFilterChange}
-                      min="18" max="99"
-                      placeholder="18"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
-                    />
+                    <input type="number" name="min_age" value={filters.min_age} onChange={handleFilterChange}
+                      min="18" max="99" placeholder="18"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300" />
                   </div>
                   <div>
                     <label className="block text-xs text-slate-400 mb-1">To</label>
-                    <input
-                      type="number"
-                      name="max_age"
-                      value={filters.max_age}
-                      onChange={handleFilterChange}
-                      min="18" max="99"
-                      placeholder="99"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
-                    />
+                    <input type="number" name="max_age" value={filters.max_age} onChange={handleFilterChange}
+                      min="18" max="99" placeholder="99"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300" />
                   </div>
                 </div>
               </div>
@@ -231,27 +256,15 @@ export default function Discovery() {
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-xs text-slate-400 mb-1">Min</label>
-                    <input
-                      type="number"
-                      name="min_fame"
-                      value={filters.min_fame}
-                      onChange={handleFilterChange}
-                      min="0"
-                      placeholder="0"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
-                    />
+                    <input type="number" name="min_fame" value={filters.min_fame} onChange={handleFilterChange}
+                      min="0" placeholder="0"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300" />
                   </div>
                   <div>
                     <label className="block text-xs text-slate-400 mb-1">Max</label>
-                    <input
-                      type="number"
-                      name="max_fame"
-                      value={filters.max_fame}
-                      onChange={handleFilterChange}
-                      min="0"
-                      placeholder="100"
-                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
-                    />
+                    <input type="number" name="max_fame" value={filters.max_fame} onChange={handleFilterChange}
+                      min="0" placeholder="100"
+                      className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300" />
                   </div>
                 </div>
               </div>
@@ -271,26 +284,17 @@ export default function Discovery() {
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tags</p>
                 <div className="relative">
-                  <input
-                    type="text"
-                    name="tags"
-                    value={filters.tags}
-                    onChange={handleFilterChange}
+                  <input type="text" name="tags" value={filters.tags} onChange={handleFilterChange}
                     onBlur={() => setTimeout(() => setTagSuggestionsOpen(false), 150)}
                     onFocus={() => tagSuggestions.length > 0 && setTagSuggestionsOpen(true)}
-                    placeholder="music, travel..."
-                    autoComplete="off"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
-                  />
+                    placeholder="music, travel..." autoComplete="off"
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300" />
                   {tagSuggestionsOpen && tagSuggestions.length > 0 && (
                     <div className="absolute z-10 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-40 overflow-auto">
                       {tagSuggestions.map((t) => (
-                        <button
-                          key={t}
-                          type="button"
+                        <button key={t} type="button"
                           className="block w-full text-left px-3 py-2 text-sm hover:bg-rose-50"
-                          onClick={() => applyTagSuggestion(t)}
-                        >
+                          onClick={() => applyTagSuggestion(t)}>
                           {t}
                         </button>
                       ))}
@@ -302,39 +306,25 @@ export default function Discovery() {
               {/* Distance */}
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Max distance (km)</p>
-                <input
-                  type="number"
-                  name="max_distance_km"
-                  value={filters.max_distance_km}
-                  onChange={handleFilterChange}
-                  min="1"
-                  placeholder="50"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
-                />
+                <input type="number" name="max_distance_km" value={filters.max_distance_km}
+                  onChange={handleFilterChange} min="1" placeholder="50"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300" />
               </div>
 
               {/* Sort */}
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Sort</p>
                 <div className="grid grid-cols-2 gap-2">
-                  <select
-                    name="sort_by"
-                    value={filters.sort_by}
-                    onChange={handleFilterChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
-                  >
+                  <select name="sort_by" value={filters.sort_by} onChange={handleFilterChange}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300">
                     <option value="">Relevance</option>
                     <option value="age">Age</option>
                     <option value="location">Location</option>
                     <option value="fame">Fame</option>
                     <option value="tags">Tags</option>
                   </select>
-                  <select
-                    name="sort_order"
-                    value={filters.sort_order}
-                    onChange={handleFilterChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
-                  >
+                  <select name="sort_order" value={filters.sort_order} onChange={handleFilterChange}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300">
                     <option value="">Default</option>
                     <option value="asc">ASC</option>
                     <option value="desc">DESC</option>
@@ -362,39 +352,29 @@ export default function Discovery() {
                   : [u.first_name, u.last_name].filter(Boolean).join(' ')
                 const initial = (u.first_name?.[0] || u.username?.[0] || '?').toUpperCase()
                 return (
-                  <Link
-                    key={u.id}
-                    to={`/users/${u.id}`}
-                    className="group relative block rounded-2xl overflow-hidden aspect-[3/4] bg-slate-100 hover:shadow-xl transition-shadow active:scale-[0.98]"
-                  >
+                  <button key={u.id} type="button"
+                    onClick={() => setSelectedUserId(u.id)}
+                    className="group relative block w-full rounded-2xl overflow-hidden aspect-[3/4] bg-slate-100 hover:shadow-xl transition-shadow active:scale-[0.98] cursor-pointer">
                     {u.primary_photo_url ? (
-                      <img
-                        src={u.primary_photo_url}
-                        alt={displayName}
+                      <img src={u.primary_photo_url} alt={displayName}
                         className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        referrerPolicy="no-referrer"
-                      />
+                        referrerPolicy="no-referrer" />
                     ) : (
                       <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
                         <span className="text-7xl font-bold text-slate-300">{initial}</span>
                       </div>
                     )}
-                    {/* gradient overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-                    {/* fame badge */}
                     {u.fame_rating > 0 && (
                       <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/40 backdrop-blur-sm text-amber-300 text-xs font-semibold">
                         ★ {u.fame_rating}
                       </div>
                     )}
-                    {/* info overlay */}
                     <div className="absolute bottom-0 inset-x-0 p-4 text-white">
                       <div className="font-bold text-lg leading-tight truncate drop-shadow">
                         {displayName || u.username}{u.birth_date ? `, ${age(u.birth_date)}` : ''}
                       </div>
-                      {u.city && (
-                        <div className="text-xs text-white/80 mt-0.5 truncate">📍 {u.city}</div>
-                      )}
+                      {u.city && <div className="text-xs text-white/80 mt-0.5 truncate">📍 {u.city}</div>}
                       {Array.isArray(u.tags) && u.tags.length > 0 && (
                         <div className="mt-2 flex flex-wrap gap-1">
                           {u.tags.slice(0, 3).map((tag) => (
@@ -405,7 +385,7 @@ export default function Discovery() {
                         </div>
                       )}
                     </div>
-                  </Link>
+                  </button>
                 )
               })}
             </div>
@@ -413,6 +393,10 @@ export default function Discovery() {
         </div>
 
       </div>
+
+      {selectedUserId && (
+        <ProfileModal userId={selectedUserId} onClose={() => setSelectedUserId(null)} />
+      )}
     </div>
   )
 }

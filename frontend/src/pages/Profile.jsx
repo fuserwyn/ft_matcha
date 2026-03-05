@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { auth, photos, profile } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import CityInput from '../components/CityInput'
+import PhotoCropper from '../components/PhotoCropper'
 
 const GENDERS = ['male', 'female', 'non-binary', 'other']
 const PREFERENCES = ['male', 'female', 'both', 'other']
@@ -33,6 +34,7 @@ export default function Profile() {
   const [savingTags, setSavingTags] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [photoList, setPhotoList] = useState([])
+  const [cropSrc, setCropSrc] = useState(null)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [tagsMessage, setTagsMessage] = useState('')
@@ -216,14 +218,22 @@ export default function Profile() {
     setPhotoList(list)
   }
 
-  const handleUpload = async (e) => {
+  const handleUpload = (e) => {
     const file = e.target.files?.[0]
     e.target.value = ''
     if (!file) return
+    const reader = new FileReader()
+    reader.onload = () => setCropSrc(reader.result)
+    reader.readAsDataURL(file)
+  }
+
+  const handleCropConfirm = async (blob) => {
+    setCropSrc(null)
     setError('')
     setMessage('')
     setUploading(true)
     try {
+      const file = new File([blob], 'photo.jpg', { type: 'image/jpeg' })
       await photos.upload(file)
       await refreshPhotos()
       setMessage('Photo uploaded')
@@ -268,6 +278,14 @@ export default function Profile() {
 
   return (
     <div>
+      {cropSrc && (
+        <PhotoCropper
+          imageSrc={cropSrc}
+          onConfirm={handleCropConfirm}
+          onCancel={() => setCropSrc(null)}
+        />
+      )}
+
       <h1 className="text-2xl font-bold text-slate-800 mb-6">Your profile</h1>
 
       {error && <div className="mb-4 bg-rose-50 text-rose-700 px-4 py-3 rounded-lg text-sm">{error}</div>}
