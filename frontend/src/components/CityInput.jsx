@@ -6,8 +6,13 @@ export default function CityInput({ value, onChange, placeholder = 'Paris, Amste
   const [highlighted, setHighlighted] = useState(-1)
   const containerRef = useRef(null)
   const justSelected = useRef(false)
+  const isMount = useRef(true)
 
   useEffect(() => {
+    if (isMount.current) {
+      isMount.current = false
+      return
+    }
     if (justSelected.current) {
       justSelected.current = false
       return
