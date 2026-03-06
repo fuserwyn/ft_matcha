@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationsContext'
+import GlobalCallBanner from './GlobalCallBanner'
 
 export function Layout({ children }) {
   const { user, logout } = useAuth()
@@ -84,6 +85,7 @@ export function Layout({ children }) {
           </div>
         </div>
       </nav>
+      <GlobalCallBanner />
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-8 min-w-0">{children}</main>
       <footer className="bg-white border-t border-slate-200 mt-auto pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm text-slate-500">
