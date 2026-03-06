@@ -1,8 +1,13 @@
 package handlers
 
 import (
+	"bytes"
+	"fmt"
+	"io"
 	"net/http"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -10,6 +15,7 @@ import (
 	"matcha/api/internal/middleware"
 	"matcha/api/internal/repository"
 	"matcha/api/internal/services"
+	"matcha/api/internal/storage"
 	ws "matcha/api/internal/websocket"
 )
 
@@ -21,6 +27,7 @@ type ChatHandler struct {
 	notificationRepo *repository.NotificationRepository
 	mailer           *services.Mailer
 	hub              *ws.Hub
+	store            *storage.MinIO
 }
 
 func NewChatHandler(
@@ -31,6 +38,7 @@ func NewChatHandler(
 	notificationRepo *repository.NotificationRepository,
 	mailer *services.Mailer,
 	hub *ws.Hub,
+	store *storage.MinIO,
 ) *ChatHandler {
 	return &ChatHandler{
 		messageRepo:      messageRepo,
@@ -40,6 +48,7 @@ func NewChatHandler(
 		notificationRepo: notificationRepo,
 		mailer:           mailer,
 		hub:              hub,
+		store:            store,
 	}
 }
 
@@ -64,34 +73,13 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 	userID, _ := c.Get(middleware.UserIDKey)
 	myID := userID.(uuid.UUID)
 
-	otherIDStr := c.Param("id")
-	otherID, err := uuid.Parse(otherIDStr)
+	otherID, err := h.validateChatPeer(c, myID)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
-		return
-	}
-
-	if myID == otherID {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "cannot message yourself"})
-		return
-	}
-
-	isMatch, err := h.likeRepo.IsMatch(c.Request.Context(), myID, otherID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if !isMatch {
-		c.JSON(http.StatusForbidden, gin.H{"error": "can only message matches"})
-		return
-	}
-	isBlocked, err := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, otherID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	if isBlocked {
-		c.JSON(http.StatusForbidden, gin.H{"error": "cannot message blocked user"})
+		if strings.Contains(err.Error(), "match") || strings.Contains(err.Error(), "blocked") {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -135,13 +123,15 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 		event := gin.H{
 			"type": "message",
 			"data": gin.H{
-				"id":          m.ID,
-				"sender_id":   m.SenderID,
-				"receiver_id": m.ReceiverID,
-				"content":     m.Content,
-				"created_at":  m.CreatedAt,
-				"is_read":     m.IsRead,
-				"read_at":     m.ReadAt,
+				"id":           m.ID,
+				"sender_id":    m.SenderID,
+				"receiver_id":  m.ReceiverID,
+				"content":      m.Content,
+				"message_type": m.MessageType,
+				"media_url":    m.MediaURL,
+				"created_at":   m.CreatedAt,
+				"is_read":      m.IsRead,
+				"read_at":      m.ReadAt,
 			},
 		}
 		h.hub.SendToUser(myID, event)
@@ -165,13 +155,15 @@ func (h *ChatHandler) SendMessage(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"id":          m.ID,
-		"sender_id":   m.SenderID,
-		"receiver_id": m.ReceiverID,
-		"content":     m.Content,
-		"created_at":  m.CreatedAt,
-		"is_read":     m.IsRead,
-		"read_at":     m.ReadAt,
+		"id":           m.ID,
+		"sender_id":    m.SenderID,
+		"receiver_id":  m.ReceiverID,
+		"content":      m.Content,
+		"message_type": m.MessageType,
+		"media_url":    m.MediaURL,
+		"created_at":   m.CreatedAt,
+		"is_read":      m.IsRead,
+		"read_at":      m.ReadAt,
 	})
 }
 
@@ -232,16 +224,177 @@ func (h *ChatHandler) GetMessages(c *gin.Context) {
 	result := make([]gin.H, len(msgs))
 	for i, m := range msgs {
 		result[i] = gin.H{
-			"id":          m.ID,
-			"sender_id":   m.SenderID,
-			"receiver_id": m.ReceiverID,
-			"content":     m.Content,
-			"created_at":  m.CreatedAt,
-			"is_read":     m.IsRead,
-			"read_at":     m.ReadAt,
+			"id":           m.ID,
+			"sender_id":    m.SenderID,
+			"receiver_id":  m.ReceiverID,
+			"content":      m.Content,
+			"message_type": m.MessageType,
+			"media_url":    m.MediaURL,
+			"created_at":   m.CreatedAt,
+			"is_read":      m.IsRead,
+			"read_at":      m.ReadAt,
 		}
 	}
 	c.JSON(http.StatusOK, result)
+}
+
+var allowedVoiceContentTypes = map[string]struct{}{
+	"audio/webm":      {},
+	"video/webm":      {},
+	"audio/mp4":       {},
+	"audio/mpeg":      {},
+	"audio/ogg":       {},
+	"application/ogg": {},
+	"audio/wav":       {},
+	"audio/x-wav":     {},
+}
+
+var allowedVoiceExtensions = map[string]struct{}{
+	".webm": {},
+	".m4a":  {},
+	".mp3":  {},
+	".ogg":  {},
+	".wav":  {},
+}
+
+const maxVoiceBytes = 10 * 1024 * 1024
+
+func normalizeContentType(v string) string {
+	contentType := strings.ToLower(strings.TrimSpace(v))
+	if i := strings.Index(contentType, ";"); i > 0 {
+		contentType = strings.TrimSpace(contentType[:i])
+	}
+	return contentType
+}
+
+func voiceContentTypeByExt(ext string) string {
+	switch ext {
+	case ".webm":
+		return "audio/webm"
+	case ".m4a":
+		return "audio/mp4"
+	case ".mp3":
+		return "audio/mpeg"
+	case ".ogg":
+		return "audio/ogg"
+	case ".wav":
+		return "audio/wav"
+	default:
+		return ""
+	}
+}
+
+func (h *ChatHandler) SendVoiceMessage(c *gin.Context) {
+	userID, _ := c.Get(middleware.UserIDKey)
+	myID := userID.(uuid.UUID)
+
+	otherID, err := h.validateChatPeer(c, myID)
+	if err != nil {
+		if strings.Contains(err.Error(), "match") || strings.Contains(err.Error(), "blocked") {
+			c.JSON(http.StatusForbidden, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if h.store == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "voice storage is not configured"})
+		return
+	}
+
+	fileHeader, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "file is required"})
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(fileHeader.Filename))
+	if _, ok := allowedVoiceExtensions[ext]; !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported voice file extension"})
+		return
+	}
+
+	src, err := fileHeader.Open()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to open uploaded file"})
+		return
+	}
+	defer src.Close()
+
+	buf, err := io.ReadAll(io.LimitReader(src, maxVoiceBytes+1))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "failed to read uploaded file"})
+		return
+	}
+	if len(buf) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "voice file is empty"})
+		return
+	}
+	if len(buf) > maxVoiceBytes {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "voice file is too large (max 10MB)"})
+		return
+	}
+
+	detectedType := normalizeContentType(http.DetectContentType(buf))
+	headerType := normalizeContentType(fileHeader.Header.Get("Content-Type"))
+	contentType := ""
+	if _, ok := allowedVoiceContentTypes[headerType]; ok {
+		contentType = headerType
+	} else if _, ok := allowedVoiceContentTypes[detectedType]; ok {
+		contentType = detectedType
+	} else {
+		contentType = voiceContentTypeByExt(ext)
+	}
+	if contentType == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported voice content type"})
+		return
+	}
+
+	voiceID := uuid.NewString()
+	objectKey := fmt.Sprintf("voice/%s/%s%s", myID.String(), voiceID, ext)
+	mediaURL, err := h.store.PutObject(c.Request.Context(), objectKey, bytes.NewReader(buf), int64(len(buf)), contentType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to store voice file"})
+		return
+	}
+
+	voiceLabel := "Voice message"
+	m, err := h.messageRepo.CreateWithMeta(c.Request.Context(), myID, otherID, voiceLabel, "voice", &mediaURL)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if h.hub != nil {
+		event := gin.H{
+			"type": "message",
+			"data": gin.H{
+				"id":           m.ID,
+				"sender_id":    m.SenderID,
+				"receiver_id":  m.ReceiverID,
+				"content":      m.Content,
+				"message_type": m.MessageType,
+				"media_url":    m.MediaURL,
+				"created_at":   m.CreatedAt,
+				"is_read":      m.IsRead,
+				"read_at":      m.ReadAt,
+			},
+		}
+		h.hub.SendToUser(myID, event)
+		h.hub.SendToUser(otherID, event)
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"id":           m.ID,
+		"sender_id":    m.SenderID,
+		"receiver_id":  m.ReceiverID,
+		"content":      m.Content,
+		"message_type": m.MessageType,
+		"media_url":    m.MediaURL,
+		"created_at":   m.CreatedAt,
+		"is_read":      m.IsRead,
+		"read_at":      m.ReadAt,
+	})
 }
 
 // MarkRead godoc
@@ -321,4 +474,29 @@ func parseLimitOffsetChat(c *gin.Context) (limit, offset int) {
 		}
 	}
 	return limit, offset
+}
+
+func (h *ChatHandler) validateChatPeer(c *gin.Context, myID uuid.UUID) (uuid.UUID, error) {
+	otherID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("invalid id")
+	}
+	if myID == otherID {
+		return uuid.Nil, fmt.Errorf("cannot message yourself")
+	}
+	isMatch, err := h.likeRepo.IsMatch(c.Request.Context(), myID, otherID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if !isMatch {
+		return uuid.Nil, fmt.Errorf("can only message matches")
+	}
+	isBlocked, err := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, otherID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	if isBlocked {
+		return uuid.Nil, fmt.Errorf("cannot message blocked user")
+	}
+	return otherID, nil
 }

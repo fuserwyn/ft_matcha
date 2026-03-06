@@ -93,6 +93,14 @@ export const chat = {
       method: 'POST',
       body: JSON.stringify({ content }),
     }),
+  sendVoiceMessage: (userId, file) => {
+    const body = new FormData()
+    body.append('file', file)
+    return api(`/api/v1/users/${userId}/messages/voice`, {
+      method: 'POST',
+      body,
+    })
+  },
   markRead: (userId) =>
     api(`/api/v1/users/${userId}/messages/read`, {
       method: 'PATCH',

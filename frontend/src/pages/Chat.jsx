@@ -8,6 +8,33 @@ function formatDate(ts) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
+function friendlyCallError(err) {
+  const msg = String(err?.message || '').toLowerCase()
+  const name = String(err?.name || '')
+  if (msg.includes('load failed')) {
+    return 'Cannot start camera stream on this device. Check camera/mic permissions and retry.'
+  }
+  if (name === 'NotAllowedError' || msg.includes('permission') || msg.includes('not allowed')) {
+    return 'Camera/microphone permission denied. Allow access in browser settings.'
+  }
+  if (name === 'NotFoundError' || msg.includes('requested device not found')) {
+    return 'No camera or microphone found on this device.'
+  }
+  if (name === 'NotReadableError' || msg.includes('could not start video source')) {
+    return 'Camera is busy in another app. Close other apps using camera and retry.'
+  }
+  if (msg.includes('https') || msg.includes('secure context')) {
+    return 'Video calls on mobile require HTTPS (or localhost).'
+  }
+  return err?.message || 'Failed to start call'
+}
+
+function createCallId() {
+  const maybeRandomUUID = globalThis?.crypto?.randomUUID
+  if (typeof maybeRandomUUID === 'function') return maybeRandomUUID.call(globalThis.crypto)
+  return `call-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 export default function Chat() {
   const { id: otherUserId } = useParams()
   const { user } = useAuth()
@@ -19,13 +46,267 @@ export default function Chat() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [connected, setConnected] = useState(false)
+  const [callState, setCallState] = useState('idle')
+  const [incomingOffer, setIncomingOffer] = useState(null)
+  const [callMode, setCallMode] = useState('video')
+  const [isRecordingVoice, setIsRecordingVoice] = useState(false)
 
   const wsRef = useRef(null)
   const listEndRef = useRef(null)
+  const pcRef = useRef(null)
+  const localStreamRef = useRef(null)
+  const remoteStreamRef = useRef(null)
+  const localVideoRef = useRef(null)
+  const remoteVideoRef = useRef(null)
+  const activeCallIdRef = useRef('')
+  const callStateRef = useRef('idle')
+  const activeCallModeRef = useRef('video')
+  const mediaRecorderRef = useRef(null)
+  const mediaChunksRef = useRef([])
 
   useEffect(() => {
     listEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  useEffect(() => {
+    callStateRef.current = callState
+  }, [callState])
+
+  const sendWsEvent = (payload) => {
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      throw new Error('WebSocket is offline')
+    }
+    wsRef.current.send(JSON.stringify(payload))
+  }
+
+  const stopVideoCall = () => {
+    if (pcRef.current) {
+      pcRef.current.onicecandidate = null
+      pcRef.current.ontrack = null
+      pcRef.current.onconnectionstatechange = null
+      pcRef.current.close()
+      pcRef.current = null
+    }
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach((t) => t.stop())
+      localStreamRef.current = null
+    }
+    if (remoteStreamRef.current) {
+      remoteStreamRef.current.getTracks().forEach((t) => t.stop())
+      remoteStreamRef.current = null
+    }
+    if (localVideoRef.current) localVideoRef.current.srcObject = null
+    if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null
+    activeCallIdRef.current = ''
+    activeCallModeRef.current = 'video'
+    setIncomingOffer(null)
+    setCallMode('video')
+    setCallState('idle')
+  }
+
+  const stopVoiceRecorderTracks = () => {
+    const rec = mediaRecorderRef.current
+    if (!rec || !rec.stream) return
+    rec.stream.getTracks().forEach((t) => t.stop())
+  }
+
+  useEffect(() => {
+    return () => {
+      stopVideoCall()
+      stopVoiceRecorderTracks()
+    }
+  }, [])
+
+  const setupPeerConnection = (callId) => {
+    const pc = new RTCPeerConnection({
+      iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+    })
+    pc.onicecandidate = (event) => {
+      if (!event.candidate || !activeCallIdRef.current) return
+      try {
+        sendWsEvent({
+          type: 'call_ice',
+          to_user_id: otherUserId,
+          call_id: activeCallIdRef.current,
+          candidate: event.candidate,
+        })
+      } catch {
+        // ignore transient websocket errors
+      }
+    }
+    pc.ontrack = (event) => {
+      const [stream] = event.streams
+      if (stream && remoteVideoRef.current) {
+        remoteStreamRef.current = stream
+        remoteVideoRef.current.srcObject = stream
+      }
+    }
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') {
+        setCallState('in_call')
+      }
+      if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+        stopVideoCall()
+      }
+    }
+    pcRef.current = pc
+    activeCallIdRef.current = callId
+    return pc
+  }
+
+  const getLocalMedia = async (mode) => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      throw new Error('This browser does not support camera/microphone access')
+    }
+    if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      throw new Error('Video calls on mobile require HTTPS (or localhost)')
+    }
+    const constraints = mode === 'audio' ? { video: false, audio: true } : { video: true, audio: true }
+    const stream = await navigator.mediaDevices.getUserMedia(constraints)
+    localStreamRef.current = stream
+    if (localVideoRef.current) localVideoRef.current.srcObject = stream
+    return stream
+  }
+
+  const startCall = async (mode) => {
+    setError('')
+    if (!connected) {
+      setError('WebSocket offline. Reconnect and try again.')
+      return
+    }
+    if (callState !== 'idle') return
+    try {
+      setCallState('calling')
+      setCallMode(mode)
+      activeCallModeRef.current = mode
+      const callId = createCallId()
+      const stream = await getLocalMedia(mode)
+      const pc = setupPeerConnection(callId)
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+      sendWsEvent({
+        type: 'call_invite',
+        to_user_id: otherUserId,
+        call_id: callId,
+        mode,
+        sdp: offer.sdp,
+      })
+    } catch (err) {
+      stopVideoCall()
+      setError(friendlyCallError(err))
+    }
+  }
+
+  const startVideoCall = async () => startCall('video')
+  const startVoiceCall = async () => startCall('audio')
+
+  const startVoiceRecording = async () => {
+    setError('')
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('This browser does not support audio recording')
+      }
+      if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+        throw new Error('Voice recording on mobile requires HTTPS (or localhost)')
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+      const recorder = new MediaRecorder(stream)
+      mediaChunksRef.current = []
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          mediaChunksRef.current.push(event.data)
+        }
+      }
+      recorder.onstop = async () => {
+        const blob = new Blob(mediaChunksRef.current, { type: recorder.mimeType || 'audio/webm' })
+        stopVoiceRecorderTracks()
+        mediaRecorderRef.current = null
+        mediaChunksRef.current = []
+        setIsRecordingVoice(false)
+        if (blob.size === 0) return
+        try {
+          const ext = blob.type.includes('mp4') ? 'm4a' : blob.type.includes('mpeg') ? 'mp3' : blob.type.includes('ogg') ? 'ogg' : blob.type.includes('wav') ? 'wav' : 'webm'
+          const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blob.type || 'audio/webm' })
+          const created = await chat.sendVoiceMessage(otherUserId, file)
+          setMessages((prev) => (prev.some((x) => x.id === created.id) ? prev : [...prev, created]))
+        } catch (err) {
+          setError(err.message || 'Failed to send voice message')
+        }
+      }
+      mediaRecorderRef.current = recorder
+      recorder.start()
+      setIsRecordingVoice(true)
+    } catch (err) {
+      setError(friendlyCallError(err))
+      setIsRecordingVoice(false)
+      stopVoiceRecorderTracks()
+    }
+  }
+
+  const stopVoiceRecording = () => {
+    const rec = mediaRecorderRef.current
+    if (!rec || rec.state !== 'recording') return
+    rec.stop()
+  }
+
+  const acceptVideoCall = async () => {
+    if (!incomingOffer) return
+    setError('')
+    try {
+      setCallState('connecting')
+      const mode = incomingOffer.mode || 'video'
+      setCallMode(mode)
+      activeCallModeRef.current = mode
+      const stream = await getLocalMedia(mode)
+      const pc = setupPeerConnection(incomingOffer.call_id)
+      stream.getTracks().forEach((track) => pc.addTrack(track, stream))
+      await pc.setRemoteDescription({ type: 'offer', sdp: incomingOffer.sdp })
+      const answer = await pc.createAnswer()
+      await pc.setLocalDescription(answer)
+      sendWsEvent({
+        type: 'call_accept',
+        to_user_id: otherUserId,
+        call_id: incomingOffer.call_id,
+        mode,
+        sdp: answer.sdp,
+      })
+      setIncomingOffer(null)
+    } catch (err) {
+      stopVideoCall()
+      setError(friendlyCallError(err))
+    }
+  }
+
+  const rejectVideoCall = () => {
+    if (!incomingOffer) return
+    try {
+      sendWsEvent({
+        type: 'call_reject',
+        to_user_id: otherUserId,
+        call_id: incomingOffer.call_id,
+      })
+    } catch {
+      // ignore websocket errors
+    }
+    setIncomingOffer(null)
+    setCallState('idle')
+  }
+
+  const endVideoCall = () => {
+    try {
+      if (activeCallIdRef.current) {
+        sendWsEvent({
+          type: 'call_end',
+          to_user_id: otherUserId,
+          call_id: activeCallIdRef.current,
+        })
+      }
+    } catch {
+      // ignore websocket errors
+    }
+    stopVideoCall()
+  }
 
   useEffect(() => {
     let active = true
@@ -106,6 +387,45 @@ export default function Chat() {
             }
           } else if (payload.type === 'error') {
             setError(payload.error || 'WebSocket error')
+          } else if (payload.type === 'call_invite' && payload.data) {
+            const d = payload.data
+            if (d.from_user_id !== otherUserId) return
+            if (callStateRef.current !== 'idle') {
+              sendWsEvent({
+                type: 'call_reject',
+                to_user_id: otherUserId,
+                call_id: d.call_id,
+              })
+              return
+            }
+            setIncomingOffer({ call_id: d.call_id, sdp: d.sdp, mode: d.mode || 'video' })
+            setCallState('incoming')
+          } else if (payload.type === 'call_accept' && payload.data) {
+            const d = payload.data
+            if (d.from_user_id !== otherUserId || !pcRef.current || !d.sdp) return
+            if (activeCallIdRef.current && d.call_id !== activeCallIdRef.current) return
+            setCallMode(d.mode || activeCallModeRef.current || 'video')
+            activeCallModeRef.current = d.mode || activeCallModeRef.current || 'video'
+            await pcRef.current.setRemoteDescription({ type: 'answer', sdp: d.sdp })
+            setCallState('connecting')
+          } else if (payload.type === 'call_ice' && payload.data) {
+            const d = payload.data
+            if (d.from_user_id !== otherUserId || !pcRef.current || !d.candidate) return
+            if (activeCallIdRef.current && d.call_id !== activeCallIdRef.current) return
+            try {
+              await pcRef.current.addIceCandidate(d.candidate)
+            } catch {
+              // ignore race where remote description not set yet
+            }
+          } else if (payload.type === 'call_reject' && payload.data) {
+            const d = payload.data
+            if (d.from_user_id !== otherUserId) return
+            setError('Call rejected')
+            stopVideoCall()
+          } else if (payload.type === 'call_end' && payload.data) {
+            const d = payload.data
+            if (d.from_user_id !== otherUserId) return
+            stopVideoCall()
           }
         } catch {
           // ignore malformed events
@@ -209,6 +529,67 @@ export default function Chat() {
           {connected ? 'WS connected' : 'WS offline'}
         </span>
       </div>
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={startVideoCall}
+          disabled={!connected || callState !== 'idle'}
+          className="px-3 py-2 bg-indigo-600 text-white rounded disabled:opacity-50"
+        >
+          Start video call
+        </button>
+        <button
+          type="button"
+          onClick={startVoiceCall}
+          disabled={!connected || callState !== 'idle'}
+          className="px-3 py-2 bg-violet-600 text-white rounded disabled:opacity-50"
+        >
+          Start voice call
+        </button>
+        <button
+          type="button"
+          onClick={endVideoCall}
+          disabled={!['calling', 'connecting', 'in_call'].includes(callState)}
+          className="px-3 py-2 bg-slate-700 text-white rounded disabled:opacity-50"
+        >
+          End call
+        </button>
+        <span className="text-xs text-slate-600">
+          Call status: {callState.replace('_', ' ')} ({callMode})
+        </span>
+      </div>
+      {callState === 'incoming' && (
+        <div className="mb-4 p-3 rounded border border-indigo-200 bg-indigo-50 flex items-center gap-2">
+          <span className="text-sm text-indigo-900">Incoming {incomingOffer?.mode || 'video'} call</span>
+          <button type="button" onClick={acceptVideoCall} className="px-3 py-1 bg-emerald-600 text-white rounded">
+            Accept
+          </button>
+          <button type="button" onClick={rejectVideoCall} className="px-3 py-1 bg-rose-600 text-white rounded">
+            Reject
+          </button>
+        </div>
+      )}
+      <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="bg-black rounded overflow-hidden h-44">
+          <video
+            ref={localVideoRef}
+            autoPlay
+            playsInline
+            muted
+            className={`w-full h-full object-cover ${callMode === 'audio' ? 'hidden' : ''}`}
+          />
+          {callMode === 'audio' && <div className="w-full h-full flex items-center justify-center text-slate-200 text-sm">Audio call</div>}
+        </div>
+        <div className="bg-black rounded overflow-hidden h-44">
+          <video
+            ref={remoteVideoRef}
+            autoPlay
+            playsInline
+            className={`w-full h-full object-cover ${callMode === 'audio' ? 'hidden' : ''}`}
+          />
+          {callMode === 'audio' && <div className="w-full h-full flex items-center justify-center text-slate-200 text-sm">Connected by voice</div>}
+        </div>
+      </div>
 
       <div className="bg-white border border-slate-200 rounded-lg p-4 h-[420px] overflow-y-auto">
         {messages.length === 0 ? (
@@ -217,10 +598,15 @@ export default function Chat() {
           <div className="space-y-3" key={user?.id}>
             {messages.map((m) => {
               const mine = m.sender_id === user?.id
+              const isVoice = m.message_type === 'voice' && m.media_url
               return (
                 <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[75%] rounded-lg px-3 py-2 ${mine ? 'bg-rose-500 text-white' : 'bg-slate-100 text-slate-800'}`}>
-                    <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                    {isVoice ? (
+                      <audio controls preload="none" src={m.media_url} className="max-w-full" />
+                    ) : (
+                      <p className="text-sm whitespace-pre-wrap">{m.content}</p>
+                    )}
                     <p className={`text-[10px] mt-1 ${mine ? 'text-rose-100' : 'text-slate-500'}`}>
                       {formatDate(m.created_at)}
                       {mine ? ` • ${m.is_read ? 'read' : 'sent'}` : ''}
@@ -246,6 +632,25 @@ export default function Chat() {
           Send
         </button>
       </form>
+      <div className="mt-2 flex gap-2">
+        {!isRecordingVoice ? (
+          <button
+            type="button"
+            onClick={startVoiceRecording}
+            className="px-3 py-2 bg-violet-600 text-white rounded"
+          >
+            Record voice
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={stopVoiceRecording}
+            className="px-3 py-2 bg-amber-600 text-white rounded"
+          >
+            Stop and send
+          </button>
+        )}
+      </div>
       {error && <p className="text-rose-600 text-sm mt-3">{error}</p>}
     </div>
   )

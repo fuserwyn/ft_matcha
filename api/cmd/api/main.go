@@ -142,7 +142,7 @@ func main() {
 	profileH := handlers.NewProfileHandler(profileRepo, photoRepo, discoveryRepo, syncSvc, minioStore, apiBaseURL)
 	discoveryH := handlers.NewDiscoveryHandler(userRepo, profileRepo, photoRepo, likeRepo, blockRepo, notificationRepo, discoveryRepo, syncSvc, wsHub, minioStore, apiBaseURL)
 	likesH := handlers.NewLikesHandler(likeRepo, userRepo, profileRepo, photoRepo, blockRepo, notificationRepo, mailer, syncSvc, wsHub, minioStore, apiBaseURL)
-	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, blockRepo, notificationRepo, mailer, wsHub)
+	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, blockRepo, notificationRepo, mailer, wsHub, minioStore)
 	photoH := handlers.NewPhotoHandler(photoRepo, minioStore, apiBaseURL)
 	notificationsH := handlers.NewNotificationsHandler(notificationRepo, blockRepo)
 	reportsH := handlers.NewReportsHandler(reportRepo, userRepo)
@@ -219,6 +219,7 @@ func main() {
 			users.DELETE("/:id/block", blocksH.UnblockUser)
 			users.DELETE("/:id/like", likesH.Unlike)
 			users.POST("/:id/messages", chatH.SendMessage)
+			users.POST("/:id/messages/voice", chatH.SendVoiceMessage)
 			users.GET("/:id/messages", chatH.GetMessages)
 			users.PATCH("/:id/messages/read", chatH.MarkRead)
 		}
