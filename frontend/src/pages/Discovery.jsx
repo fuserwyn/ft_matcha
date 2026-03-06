@@ -212,7 +212,7 @@ export default function Discovery() {
 
               {/* Looking for */}
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Looking for</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Their preference</p>
                 <div className="flex flex-wrap gap-2">
                   {INTERESTS.map((i) => (
                     <label key={i} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-sm cursor-pointer transition ${

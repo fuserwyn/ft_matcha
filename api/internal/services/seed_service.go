@@ -144,20 +144,55 @@ func (s *SeedService) createSeedUser(ctx context.Context, hash []byte, rng *rand
 		if err := s.profileRepo.SetTags(ctx, user.ID, tags); err != nil {
 			return err
 		}
-		if err := s.createDefaultPhotos(ctx, user.ID, user.Username, rng); err != nil {
+		if err := s.createDefaultPhotos(ctx, user.ID, gender, rng); err != nil {
 			return err
 		}
 		return nil
 	}
 }
 
-func (s *SeedService) createDefaultPhotos(ctx context.Context, userID uuid.UUID, username string, rng *rand.Rand) error {
+// High-quality portrait photo IDs from Unsplash CDN (600×800, face-cropped)
+// All IDs verified HTTP 200 and confirmed correct gender
+var unsplashMale = []string{
+	"1507003211169-0a1dd7228f2d", "1472099645785-5658abf4ff4e", "1463453091185-61582044d556",
+	"1504257432389-52343af06ae3", "1508214751196-bcfd4ca60f91", "1500048993953-d23a436266cf",
+	"1539571696357-5a69c17a67c6", "1547425260-76bcadfb4f2c", "1560250097-0b93528c311a",
+	"1568602471122-7832951cc4c5", "1552374196-1ab2a1c593e8", "1492562080023-ab3db95bfbce",
+	"1580273916550-e323be2ae537", "1603415526960-f7e0328c63b1", "1554151228-14d9def656e4",
+	"1564564321837-a57b7070ac4f", "1509909756405-be0199881695", "1499996860823-5214fcc65f8f",
+	"1573496359142-b8d87734a5a2", "1599566150163-29194dcaad36",
+}
+
+var unsplashFemale = []string{
+	"1438761681033-6461ffad8d80", "1487412720507-e7ab37603c6f", "1534528741775-53994a69daeb",
+	"1517841905240-472988babdf9", "1520813792240-56fc4a3765a7", "1494790108377-be9c29b29330",
+	"1502823403499-6ccfcf4fb453", "1540569014015-19a7be504e3a", "1519699047748-de8e457a634e",
+	"1532074205216-d0e1f4b87368", "1594824476967-48c8b964273f", "1529626455594-4ff0802cfb7e",
+	"1557555187-23d685287bc3", "1604004555489-723a93d6ce74", "1519345182560-3f2917c472ef",
+	"1596451190630-186aff535bf2", "1610389051254-64849803c8fd", "1535713875002-d1d0cf377fde",
+	"1541271696563-3be2f555fc4e", "1580489944761-15a19d654956", "1559598467-f8b76c8155d0",
+	"1619895862022-09114b41f16f",
+}
+
+func unsplashPortraitURL(id string) string {
+	return fmt.Sprintf("https://images.unsplash.com/photo-%s?w=600&h=800&fit=crop&crop=faces&auto=format&q=80", id)
+}
+
+func (s *SeedService) createDefaultPhotos(ctx context.Context, userID uuid.UUID, gender string, rng *rand.Rand) error {
+	pool := unsplashMale
+	if gender == "female" {
+		pool = unsplashFemale
+	}
 	photoCount := 1 + rng.Intn(2)
+	used := map[int]bool{}
 	for i := 0; i < photoCount; i++ {
+		n := rng.Intn(len(pool))
+		for used[n] {
+			n = rng.Intn(len(pool))
+		}
+		used[n] = true
 		objectKey := fmt.Sprintf("seed/default/%s/%02d.jpg", userID.String(), i+1)
-		seed := fmt.Sprintf("%s_%02d", username, i+1)
-		url := fmt.Sprintf("https://picsum.photos/seed/%s/600/800", seed)
-		if _, err := s.photoRepo.Create(ctx, userID, objectKey, url, i == 0); err != nil {
+		if _, err := s.photoRepo.Create(ctx, userID, objectKey, unsplashPortraitURL(pool[n]), i == 0); err != nil {
 			return err
 		}
 	}
