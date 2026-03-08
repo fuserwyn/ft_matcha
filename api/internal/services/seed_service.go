@@ -17,12 +17,10 @@ import (
 )
 
 type SeedService struct {
-	userRepo    *repository.UserRepository
-	profileRepo *repository.ProfileRepository
-	photoRepo   *repository.PhotoRepository
+	userRepo        *repository.UserRepository
+	profileRepo     *repository.ProfileRepository
+	photoRepo       *repository.PhotoRepository
 	randomPhotoUsed map[string]struct{}
-	malePhotoCount  int
-	femalePhotoCount int
 }
 
 func NewSeedService(
@@ -31,12 +29,10 @@ func NewSeedService(
 	photoRepo *repository.PhotoRepository,
 ) *SeedService {
 	return &SeedService{
-		userRepo:         userRepo,
-		profileRepo:      profileRepo,
-		photoRepo:        photoRepo,
-		randomPhotoUsed:  map[string]struct{}{},
-		malePhotoCount:   0,
-		femalePhotoCount: 0,
+		userRepo:        userRepo,
+		profileRepo:     profileRepo,
+		photoRepo:       photoRepo,
+		randomPhotoUsed: map[string]struct{}{},
 	}
 }
 
@@ -53,8 +49,6 @@ type randomUserResult struct {
 		Large string `json:"large"`
 	} `json:"picture"`
 }
-
-const uniqueRandomUserPhotoPerGender = 89
 
 func fetchRandomUsers(gender string, count int) ([]randomUserResult, error) {
 	url := fmt.Sprintf(
@@ -237,39 +231,39 @@ func (s *SeedService) createSeedUserFromAPI(ctx context.Context, hash []byte, rn
 func (s *SeedService) pickSeedPhotoURL(userID uuid.UUID, ru randomUserResult, gender string) string {
 	portraitURL := strings.TrimSpace(ru.Picture.Large)
 	normGender := strings.ToLower(strings.TrimSpace(gender))
-	switch normGender {
-	case "male":
-		if s.malePhotoCount < uniqueRandomUserPhotoPerGender {
-			if portraitURL != "" {
-				if _, used := s.randomPhotoUsed[portraitURL]; !used {
-					s.randomPhotoUsed[portraitURL] = struct{}{}
-					s.malePhotoCount++
-					return portraitURL
-				}
-			}
-			if nextURL, ok := s.nextUnusedRandomUserPortraitURL("male"); ok {
-				s.randomPhotoUsed[nextURL] = struct{}{}
-				s.malePhotoCount++
-				return nextURL
-			}
+	if portraitURL != "" {
+		if _, used := s.randomPhotoUsed[portraitURL]; !used {
+			s.randomPhotoUsed[portraitURL] = struct{}{}
+			return portraitURL
 		}
-	case "female":
-		if s.femalePhotoCount < uniqueRandomUserPhotoPerGender {
-			if portraitURL != "" {
-				if _, used := s.randomPhotoUsed[portraitURL]; !used {
-					s.randomPhotoUsed[portraitURL] = struct{}{}
-					s.femalePhotoCount++
-					return portraitURL
-				}
-			}
-			if nextURL, ok := s.nextUnusedRandomUserPortraitURL("female"); ok {
-				s.randomPhotoUsed[nextURL] = struct{}{}
-				s.femalePhotoCount++
-				return nextURL
-			}
+		// If the API returns a duplicate URL, still prefer portrait over landscape.
+		return portraitURL
+	}
+	if nextURL, ok := s.nextUnusedRandomUserPortraitURL(normGender); ok {
+		s.randomPhotoUsed[nextURL] = struct{}{}
+		return nextURL
+	}
+	// Last-resort fallback when randomuser photo is not available.
+	if nextURL, ok := s.nextUnusedRandomUserPortraitURL("male"); ok {
+		s.randomPhotoUsed[nextURL] = struct{}{}
+		return nextURL
+	}
+	if nextURL, ok := s.nextUnusedRandomUserPortraitURL("female"); ok {
+		s.randomPhotoUsed[nextURL] = struct{}{}
+		return nextURL
+	}
+	if portraitURL != "" {
+		return portraitURL
+	}
+	if normGender == "female" {
+		if nextURL, ok := s.nextUnusedRandomUserPortraitURL("female"); ok {
+			return nextURL
 		}
 	}
-	// Landscape fallback for all remaining seed users after 178 unique randomuser portraits.
+	if nextURL, ok := s.nextUnusedRandomUserPortraitURL("male"); ok {
+		return nextURL
+	}
+	// Absolute fallback: keep deterministic URL if portrait pools are exhausted.
 	return fmt.Sprintf("https://picsum.photos/seed/landscape_%s/1200/800", userID.String())
 }
 

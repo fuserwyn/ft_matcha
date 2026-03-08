@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
 import { auth } from '../api/client'
 
 export default function Register() {
@@ -11,9 +10,9 @@ export default function Register() {
     first_name: '',
     last_name: '',
   })
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
 
   const handleChange = (e) => {
     setForm((f) => ({ ...f, [e.target.name]: e.target.value }))
@@ -24,6 +23,10 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
+    if (form.password !== confirmPassword) {
+      setError('Passwords do not match')
+      return
+    }
     setLoading(true)
     setSuccess(false)
     try {
@@ -116,9 +119,22 @@ export default function Register() {
               8–72 characters. Avoid common passwords (e.g. password123, qwerty).
             </p>
           </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">Confirm password</label>
+            <input
+              type="password"
+              name="confirm_password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+              required
+              minLength={8}
+              maxLength={72}
+            />
+          </div>
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || form.password !== confirmPassword}
             className="w-full py-3 bg-rose-500 text-white font-medium rounded-lg hover:bg-rose-600 disabled:opacity-50 transition"
           >
             {loading ? 'Creating...' : 'Sign up'}
