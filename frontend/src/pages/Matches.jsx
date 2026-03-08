@@ -10,7 +10,7 @@ export default function Matches() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
-  const [offset, setOffset] = useState(0)
+  const [nextCursor, setNextCursor] = useState('')
   const [error, setError] = useState('')
   const [blockingId, setBlockingId] = useState(null)
 
@@ -32,18 +32,24 @@ export default function Matches() {
     }
   }, [searchParams, setSearchParams])
 
-  const load = async ({ append = false, currentOffset = 0 } = {}) => {
+  const load = async ({ append = false, cursor = '' } = {}) => {
     if (append) setLoadingMore(true)
     else setLoading(true)
     setError('')
     try {
-      const data = await matches.list({ limit: PAGE_SIZE, offset: currentOffset })
-      setItems((prev) => (append ? [...prev, ...data] : data))
-      setOffset(currentOffset + data.length)
-      setHasMore(data.length === PAGE_SIZE)
+      const params = { limit: PAGE_SIZE }
+      if (cursor) params.cursor = cursor
+      const data = await matches.list(params)
+      const pageItems = Array.isArray(data) ? data : (data.items || [])
+      const pageHasMore = Array.isArray(data) ? pageItems.length === PAGE_SIZE : !!data.has_more
+      const pageNextCursor = Array.isArray(data) ? '' : (data.next_cursor || '')
+      setItems((prev) => (append ? [...prev, ...pageItems] : pageItems))
+      setNextCursor(pageNextCursor)
+      setHasMore(pageHasMore)
     } catch (err) {
       setError(err.message || 'Failed to load matches')
       if (!append) setItems([])
+      setNextCursor('')
       setHasMore(false)
     } finally {
       if (append) setLoadingMore(false)
@@ -52,12 +58,12 @@ export default function Matches() {
   }
 
   useEffect(() => {
-    load({ append: false, currentOffset: 0 })
+    load({ append: false, cursor: '' })
   }, [])
 
   const loadMore = () => {
     if (loadingMore || loading || !hasMore) return
-    load({ append: true, currentOffset: offset })
+    load({ append: true, cursor: nextCursor })
   }
 
   if (loading) {

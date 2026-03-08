@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -9,6 +10,12 @@ import (
 
 type BlockRepository struct {
 	pool *pgxpool.Pool
+}
+
+type BlockedUserCursorRow struct {
+	BlockedUserID uuid.UUID
+	CursorTime    time.Time
+	CursorID      uuid.UUID
 }
 
 func NewBlockRepository(pool *pgxpool.Pool) *BlockRepository {
@@ -81,4 +88,57 @@ func (r *BlockRepository) ListBlockedIDs(ctx context.Context, userID uuid.UUID) 
 		ids = append(ids, id)
 	}
 	return ids, rows.Err()
+}
+
+func (r *BlockRepository) ListBlockedByMe(ctx context.Context, userID uuid.UUID, limit, offset int) ([]uuid.UUID, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT blocked_user_id
+		FROM user_blocks
+		WHERE blocker_user_id = $1
+		ORDER BY created_at DESC
+		LIMIT $2 OFFSET $3
+	`, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
+func (r *BlockRepository) ListBlockedByMeCursor(ctx context.Context, userID uuid.UUID, limit int, cursorTime *time.Time, cursorID *uuid.UUID) ([]BlockedUserCursorRow, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT blocked_user_id, created_at AS page_created_at, blocked_user_id AS page_id
+		FROM user_blocks
+		WHERE blocker_user_id = $1
+		  AND (
+		    $3::timestamptz IS NULL
+		    OR created_at < $3
+		    OR (created_at = $3 AND blocked_user_id < $4)
+		  )
+		ORDER BY created_at DESC, blocked_user_id DESC
+		LIMIT $2
+	`, userID, limit, cursorTime, cursorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []BlockedUserCursorRow
+	for rows.Next() {
+		var row BlockedUserCursorRow
+		if err := rows.Scan(&row.BlockedUserID, &row.CursorTime, &row.CursorID); err != nil {
+			return nil, err
+		}
+		result = append(result, row)
+	}
+	return result, rows.Err()
 }

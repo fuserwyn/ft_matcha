@@ -83,6 +83,13 @@ export const likes = {
   },
 }
 
+export const blocks = {
+  list: (params = {}) => {
+    const q = new URLSearchParams(params).toString()
+    return api(`/api/v1/blocks${q ? '?' + q : ''}`)
+  },
+}
+
 export const chat = {
   listMessages: (userId, params = {}) => {
     const q = new URLSearchParams(params).toString()

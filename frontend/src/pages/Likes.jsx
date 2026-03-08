@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { likes, users } from '../api/client'
+import { blocks, likes, users } from '../api/client'
 
 const TABS = [
   { id: 'by-me', label: 'I liked', fetch: likes.listByMe },
   { id: 'liked-me', label: 'Liked me', fetch: likes.listLikedMe },
+  { id: 'blocked', label: 'Blocked', fetch: blocks.list },
 ]
 const PAGE_SIZE = 24
 
@@ -14,25 +15,32 @@ export default function Likes() {
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
-  const [offset, setOffset] = useState(0)
+  const [nextCursor, setNextCursor] = useState('')
   const [error, setError] = useState('')
   const [actionId, setActionId] = useState(null)
 
   const currentTab = TABS.find((t) => t.id === activeTab)
   const isByMe = activeTab === 'by-me'
+  const isBlockedTab = activeTab === 'blocked'
 
-  const load = async ({ append = false, currentOffset = 0 } = {}) => {
+  const load = async ({ append = false, cursor = '' } = {}) => {
     if (append) setLoadingMore(true)
     else setLoading(true)
     setError('')
     try {
-      const data = await currentTab.fetch({ limit: PAGE_SIZE, offset: currentOffset })
-      setItems((prev) => (append ? [...prev, ...data] : data))
-      setOffset(currentOffset + data.length)
-      setHasMore(data.length === PAGE_SIZE)
+      const params = { limit: PAGE_SIZE }
+      if (cursor) params.cursor = cursor
+      const data = await currentTab.fetch(params)
+      const pageItems = Array.isArray(data) ? data : (data.items || [])
+      const pageHasMore = Array.isArray(data) ? pageItems.length === PAGE_SIZE : !!data.has_more
+      const pageNextCursor = Array.isArray(data) ? '' : (data.next_cursor || '')
+      setItems((prev) => (append ? [...prev, ...pageItems] : pageItems))
+      setNextCursor(pageNextCursor)
+      setHasMore(pageHasMore)
     } catch (err) {
       setError(err.message || 'Failed to load likes')
       if (!append) setItems([])
+      setNextCursor('')
       setHasMore(false)
     } finally {
       if (append) setLoadingMore(false)
@@ -41,14 +49,14 @@ export default function Likes() {
   }
 
   useEffect(() => {
-    setOffset(0)
+    setNextCursor('')
     setHasMore(true)
-    load({ append: false, currentOffset: 0 })
+    load({ append: false, cursor: '' })
   }, [activeTab])
 
   const loadMore = () => {
     if (loadingMore || loading || !hasMore) return
-    load({ append: true, currentOffset: offset })
+    load({ append: true, cursor: nextCursor })
   }
 
   const handleUnlike = async (userId) => {
@@ -90,6 +98,19 @@ export default function Likes() {
     }
   }
 
+  const handleUnblock = async (userId) => {
+    setActionId(userId)
+    setError('')
+    try {
+      await users.unblock(userId)
+      setItems((prev) => prev.filter((u) => u.id !== userId))
+    } catch (err) {
+      setError(err.message || 'Failed to unblock')
+    } finally {
+      setActionId(null)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -122,7 +143,7 @@ export default function Likes() {
 
       {items.length === 0 ? (
         <p className="text-slate-500">
-          {isByMe ? 'You have not liked anyone yet.' : 'No one has liked you yet.'}
+          {isByMe ? 'You have not liked anyone yet.' : isBlockedTab ? 'You have not blocked anyone yet.' : 'No one has liked you yet.'}
         </p>
       ) : (
         <>
@@ -149,10 +170,17 @@ export default function Likes() {
                     <Link to={`/users/${u.id}`} className="px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-sm text-xs text-white hover:bg-white/30 transition">
                       Profile
                     </Link>
-                    <Link to={`/chat/${u.id}`} className="px-3 py-1.5 rounded-full bg-rose-500 text-xs text-white hover:bg-rose-600 transition">
-                      💬 Chat
-                    </Link>
-                    {isByMe ? (
+                    {!isBlockedTab && (
+                      <Link to={`/chat/${u.id}`} className="px-3 py-1.5 rounded-full bg-rose-500 text-xs text-white hover:bg-rose-600 transition">
+                        💬 Chat
+                      </Link>
+                    )}
+                    {isBlockedTab ? (
+                      <button onClick={() => handleUnblock(u.id)} disabled={!!actionId}
+                        className="px-3 py-1.5 rounded-full bg-emerald-500 text-xs text-white hover:bg-emerald-600 transition disabled:opacity-60">
+                        {actionId === u.id ? '...' : 'Unblock'}
+                      </button>
+                    ) : isByMe ? (
                       <button onClick={() => handleUnlike(u.id)} disabled={!!actionId}
                         className="px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-sm text-xs text-white hover:bg-white/30 transition disabled:opacity-60">
                         {actionId === u.id ? '...' : 'Unlike'}
@@ -163,10 +191,12 @@ export default function Likes() {
                         {actionId === u.id ? '...' : '♡ Like back'}
                       </button>
                     )}
-                    <button onClick={() => handleBlock(u.id)} disabled={!!actionId}
-                      className="px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-sm text-xs text-white hover:bg-white/30 transition disabled:opacity-60">
-                      {actionId === u.id ? '...' : 'Block'}
-                    </button>
+                    {!isBlockedTab && (
+                      <button onClick={() => handleBlock(u.id)} disabled={!!actionId}
+                        className="px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-sm text-xs text-white hover:bg-white/30 transition disabled:opacity-60">
+                        {actionId === u.id ? '...' : 'Block'}
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>

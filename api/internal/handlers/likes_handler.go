@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -188,31 +187,49 @@ func (h *LikesHandler) Unlike(c *gin.Context) {
 // @Tags		likes
 // @Security	BearerAuth
 // @Param		limit	query		int	false	"Limit (default 20)"
-// @Param		offset	query		int	false	"Offset"
-// @Success	200	{array}		object
+// @Param		cursor	query		string	false	"Cursor from previous response"
+// @Success	200	{object}	object
 // @Router		/api/v1/likes [get]
 func (h *LikesHandler) GetLikedByMe(c *gin.Context) {
 	userID, _ := c.Get(middleware.UserIDKey)
 	id := userID.(uuid.UUID)
 
-	limit, offset := parseLimitOffset(c)
+	limit := parseCursorLimit(c, 20, 50)
+	cursor, err := parsePageCursor(c.Query("cursor"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid cursor"})
+		return
+	}
 	blockedIDs, _ := h.blockRepo.ListBlockedIDs(c.Request.Context(), id)
 
-	cards, err := h.likeRepo.GetLikedByMe(c.Request.Context(), id, blockedIDs, limit, offset)
+	cards, err := h.likeRepo.GetLikedByMeCursor(c.Request.Context(), id, blockedIDs, limit+1, cursorTime(cursor), cursorID(cursor))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	hasMore := len(cards) > limit
+	if hasMore {
+		cards = cards[:limit]
+	}
 
 	result := make([]gin.H, len(cards))
 	for i, card := range cards {
-		item := toUserCardResp(&cards[i])
-		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
+		item := toUserCardResp(&cards[i].Card)
+		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.Card.ID); err == nil && p != nil {
 			item["primary_photo_url"] = photoURL(p, h.apiBaseURL)
 		}
 		result[i] = item
 	}
-	c.JSON(http.StatusOK, result)
+	nextCursor := ""
+	if hasMore && len(cards) > 0 {
+		last := cards[len(cards)-1]
+		nextCursor = encodePageCursor(last.CursorTime, last.CursorID)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"items":       result,
+		"next_cursor": nextCursor,
+		"has_more":    hasMore,
+	})
 }
 
 // GetLikedMe godoc
@@ -220,31 +237,49 @@ func (h *LikesHandler) GetLikedByMe(c *gin.Context) {
 // @Tags		likes
 // @Security	BearerAuth
 // @Param		limit	query		int	false	"Limit (default 20)"
-// @Param		offset	query		int	false	"Offset"
-// @Success	200	{array}		object
+// @Param		cursor	query		string	false	"Cursor from previous response"
+// @Success	200	{object}	object
 // @Router		/api/v1/likes/me [get]
 func (h *LikesHandler) GetLikedMe(c *gin.Context) {
 	userID, _ := c.Get(middleware.UserIDKey)
 	id := userID.(uuid.UUID)
 
-	limit, offset := parseLimitOffset(c)
+	limit := parseCursorLimit(c, 20, 50)
+	cursor, err := parsePageCursor(c.Query("cursor"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid cursor"})
+		return
+	}
 	blockedIDs, _ := h.blockRepo.ListBlockedIDs(c.Request.Context(), id)
 
-	cards, err := h.likeRepo.GetLikedMe(c.Request.Context(), id, blockedIDs, limit, offset)
+	cards, err := h.likeRepo.GetLikedMeCursor(c.Request.Context(), id, blockedIDs, limit+1, cursorTime(cursor), cursorID(cursor))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	hasMore := len(cards) > limit
+	if hasMore {
+		cards = cards[:limit]
+	}
 
 	result := make([]gin.H, len(cards))
 	for i, card := range cards {
-		item := toUserCardResp(&cards[i])
-		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
+		item := toUserCardResp(&cards[i].Card)
+		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.Card.ID); err == nil && p != nil {
 			item["primary_photo_url"] = photoURL(p, h.apiBaseURL)
 		}
 		result[i] = item
 	}
-	c.JSON(http.StatusOK, result)
+	nextCursor := ""
+	if hasMore && len(cards) > 0 {
+		last := cards[len(cards)-1]
+		nextCursor = encodePageCursor(last.CursorTime, last.CursorID)
+	}
+	c.JSON(http.StatusOK, gin.H{
+		"items":       result,
+		"next_cursor": nextCursor,
+		"has_more":    hasMore,
+	})
 }
 
 // GetMatches godoc
@@ -252,47 +287,49 @@ func (h *LikesHandler) GetLikedMe(c *gin.Context) {
 // @Tags		likes
 // @Security	BearerAuth
 // @Param		limit	query		int	false	"Limit (default 20)"
-// @Param		offset	query		int	false	"Offset"
-// @Success	200	{array}		object
+// @Param		cursor	query		string	false	"Cursor from previous response"
+// @Success	200	{object}	object
 // @Router		/api/v1/matches [get]
 func (h *LikesHandler) GetMatches(c *gin.Context) {
 	userID, _ := c.Get(middleware.UserIDKey)
 	id := userID.(uuid.UUID)
 
-	limit, offset := parseLimitOffset(c)
+	limit := parseCursorLimit(c, 20, 50)
+	cursor, err := parsePageCursor(c.Query("cursor"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid cursor"})
+		return
+	}
 	blockedIDs, _ := h.blockRepo.ListBlockedIDs(c.Request.Context(), id)
 
-	cards, err := h.likeRepo.GetMatches(c.Request.Context(), id, blockedIDs, limit, offset)
+	cards, err := h.likeRepo.GetMatchesCursor(c.Request.Context(), id, blockedIDs, limit+1, cursorTime(cursor), cursorID(cursor))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	hasMore := len(cards) > limit
+	if hasMore {
+		cards = cards[:limit]
+	}
 
 	result := make([]gin.H, len(cards))
 	for i, card := range cards {
-		item := toUserCardResp(&cards[i])
-		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.ID); err == nil && p != nil {
+		item := toUserCardResp(&cards[i].Card)
+		if p, err := h.photoRepo.GetPrimaryByUser(c.Request.Context(), card.Card.ID); err == nil && p != nil {
 			item["primary_photo_url"] = photoURL(p, h.apiBaseURL)
 		}
 		result[i] = item
 	}
-	c.JSON(http.StatusOK, result)
-}
-
-func parseLimitOffset(c *gin.Context) (limit, offset int) {
-	limit = 20
-	offset = 0
-	if v := c.Query("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 50 {
-			limit = n
-		}
+	nextCursor := ""
+	if hasMore && len(cards) > 0 {
+		last := cards[len(cards)-1]
+		nextCursor = encodePageCursor(last.CursorTime, last.CursorID)
 	}
-	if v := c.Query("offset"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
-			offset = n
-		}
-	}
-	return limit, offset
+	c.JSON(http.StatusOK, gin.H{
+		"items":       result,
+		"next_cursor": nextCursor,
+		"has_more":    hasMore,
+	})
 }
 
 func pushNotification(hub *ws.Hub, userID uuid.UUID, n *repository.Notification) {

@@ -11,17 +11,19 @@ import (
 )
 
 type ReportsHandler struct {
-	reports  *repository.ReportRepository
-	userRepo *repository.UserRepository
+	reports   *repository.ReportRepository
+	userRepo  *repository.UserRepository
+	blockRepo *repository.BlockRepository
 }
 
-func NewReportsHandler(reports *repository.ReportRepository, userRepo *repository.UserRepository) *ReportsHandler {
-	return &ReportsHandler{reports: reports, userRepo: userRepo}
+func NewReportsHandler(reports *repository.ReportRepository, userRepo *repository.UserRepository, blockRepo *repository.BlockRepository) *ReportsHandler {
+	return &ReportsHandler{reports: reports, userRepo: userRepo, blockRepo: blockRepo}
 }
 
 type ReportUserReq struct {
-	Reason  string  `json:"reason" binding:"required"`
-	Comment *string `json:"comment"`
+	Reason    string  `json:"reason" binding:"required"`
+	Comment   *string `json:"comment"`
+	BlockUser bool    `json:"block_user"`
 }
 
 var allowedReportReasons = map[string]struct{}{
@@ -85,6 +87,12 @@ func (h *ReportsHandler) ReportUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	if req.BlockUser {
+		if err := h.blockRepo.Block(c.Request.Context(), reporterID, targetID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
 
 	c.JSON(http.StatusCreated, gin.H{
 		"id":               report.ID,
@@ -95,6 +103,7 @@ func (h *ReportsHandler) ReportUser(c *gin.Context) {
 		"status":           report.Status,
 		"created_at":       report.CreatedAt,
 		"updated_at":       report.UpdatedAt,
+		"blocked_user":     req.BlockUser,
 	})
 }
 

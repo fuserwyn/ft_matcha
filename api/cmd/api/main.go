@@ -145,8 +145,8 @@ func main() {
 	chatH := handlers.NewChatHandler(messageRepo, likeRepo, userRepo, blockRepo, notificationRepo, mailer, wsHub, minioStore)
 	photoH := handlers.NewPhotoHandler(photoRepo, minioStore, apiBaseURL)
 	notificationsH := handlers.NewNotificationsHandler(notificationRepo, blockRepo)
-	reportsH := handlers.NewReportsHandler(reportRepo, userRepo)
-	blocksH := handlers.NewBlocksHandler(blockRepo, userRepo)
+	reportsH := handlers.NewReportsHandler(reportRepo, userRepo, blockRepo)
+	blocksH := handlers.NewBlocksHandler(blockRepo, userRepo, profileRepo, photoRepo, apiBaseURL)
 	wsChatH := ws.NewChatHandler(wsHub, likeRepo, messageRepo, userRepo, blockRepo, notificationRepo, presenceRepo, mailer, config.JWTSecret())
 	presenceH := handlers.NewPresenceHandler(presenceRepo, wsHub)
 
@@ -235,6 +235,7 @@ func main() {
 
 		api.GET("/likes/me", authMw, touchPresenceMw, likesH.GetLikedMe)
 		api.GET("/likes", authMw, touchPresenceMw, likesH.GetLikedByMe)
+		api.GET("/blocks", authMw, touchPresenceMw, blocksH.ListBlockedUsers)
 		api.GET("/matches", authMw, touchPresenceMw, likesH.GetMatches)
 		api.GET("/notifications", authMw, touchPresenceMw, notificationsH.List)
 		api.PATCH("/notifications/read-all", authMw, touchPresenceMw, notificationsH.MarkAllRead)

@@ -16,7 +16,7 @@ export default function ProfileModal({ userId, onClose }) {
   const [blocked, setBlocked] = useState(false)
   const [reporting, setReporting] = useState(false)
   const [reportModal, setReportModal] = useState(false)
-  const [reportAndBlock, setReportAndBlock] = useState(false)
+  const [selectedReportReason, setSelectedReportReason] = useState('')
   const [hasPrimaryPhoto, setHasPrimaryPhoto] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(null)
   const touchStartX = useRef(null)
@@ -105,20 +105,25 @@ export default function ProfileModal({ userId, onClose }) {
     finally { setLiking(false) }
   }
 
-  const onReport = async (reason) => {
+  const onReport = async (reason, shouldBlock) => {
     setReporting(true); setInfo(''); setError('')
     try {
-      await users.report(userId, { reason, comment: null })
-      if (reportAndBlock && !blocked) {
-        await users.block(userId)
+      await users.report(userId, { reason, comment: null, block_user: shouldBlock && !blocked })
+      if (shouldBlock && !blocked) {
         setBlocked(true)
       }
       setReportModal(false)
-      setReportAndBlock(false)
-      setInfo(reportAndBlock ? 'Report submitted and user blocked.' : 'Report submitted. Thank you.')
+      setSelectedReportReason('')
+      setInfo(shouldBlock ? 'Report submitted and user blocked.' : 'Report submitted. Thank you.')
     }
     catch (err) { setError(err.message || 'Failed') }
     finally { setReporting(false) }
+  }
+
+  const closeReportModal = () => {
+    if (reporting) return
+    setReportModal(false)
+    setSelectedReportReason('')
   }
 
   const onToggleBlock = async () => {
@@ -361,36 +366,53 @@ export default function ProfileModal({ userId, onClose }) {
 
       {/* ── Report modal ── */}
       {reportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4" onClick={() => setReportModal(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4" onClick={closeReportModal}>
           <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="font-semibold text-slate-800 mb-3">Report profile</h3>
-            <div className="flex flex-col gap-2">
-              {[
-                { value: 'fake_account', label: 'Fake account' },
-                { value: 'spam', label: 'Spam' },
-                { value: 'harassment', label: 'Harassment' },
-                { value: 'inappropriate', label: 'Inappropriate content' },
-                { value: 'scam', label: 'Scam' },
-                { value: 'other', label: 'Other' },
-              ].map((opt) => (
-                <button key={opt.value} onClick={() => onReport(opt.value)} disabled={reporting}
-                  className="text-left px-4 py-2 rounded border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-60">
-                  {opt.label}
+            {!selectedReportReason ? (
+              <>
+                <p className="text-sm text-slate-600 mb-4">Choose report reason:</p>
+                <div className="flex flex-col gap-2">
+                  {[
+                    { value: 'fake_account', label: 'Fake account' },
+                    { value: 'spam', label: 'Spam' },
+                    { value: 'harassment', label: 'Harassment' },
+                    { value: 'inappropriate', label: 'Inappropriate content' },
+                    { value: 'scam', label: 'Scam' },
+                    { value: 'other', label: 'Other' },
+                  ].map((opt) => (
+                    <button key={opt.value} onClick={() => setSelectedReportReason(opt.value)} disabled={reporting}
+                      className="text-left px-4 py-2 rounded border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-60">
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={closeReportModal} className="mt-4 w-full py-2 text-slate-500 hover:text-slate-700 text-sm">
+                  Cancel
                 </button>
-              ))}
-            </div>
-            <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={reportAndBlock}
-                onChange={(e) => setReportAndBlock(e.target.checked)}
-                className="rounded border-slate-300 text-rose-500 focus:ring-rose-500"
-              />
-              Block this user too
-            </label>
-            <button onClick={() => setReportModal(false)} className="mt-4 w-full py-2 text-slate-500 hover:text-slate-700 text-sm">
-              Cancel
-            </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-slate-700 mb-4">Do you also want to add this user to block list?</p>
+                <div className="flex flex-col gap-2">
+                  <button onClick={() => onReport(selectedReportReason, true)} disabled={reporting}
+                    className="px-4 py-2 rounded border border-rose-300 bg-rose-50 text-rose-700 hover:bg-rose-100 disabled:opacity-60">
+                    {reporting ? 'Sending...' : 'Yes, report and block'}
+                  </button>
+                  <button onClick={() => onReport(selectedReportReason, false)} disabled={reporting}
+                    className="px-4 py-2 rounded border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+                    {reporting ? 'Sending...' : 'No, only report'}
+                  </button>
+                </div>
+                <button
+                  onClick={() => setSelectedReportReason('')}
+                  disabled={reporting}
+                  className="mt-4 w-full py-2 text-slate-500 hover:text-slate-700 text-sm disabled:opacity-60"
+                >
+                  Back
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
