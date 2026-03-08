@@ -18,6 +18,7 @@ export default function UserProfile() {
   const [blocked, setBlocked] = useState(false)
   const [reporting, setReporting] = useState(false)
   const [reportModal, setReportModal] = useState(false)
+  const [reportAndBlock, setReportAndBlock] = useState(false)
   const [hasPrimaryPhoto, setHasPrimaryPhoto] = useState(false)
   const [lightboxIndex, setLightboxIndex] = useState(null)
   const touchStartX = useRef(null)
@@ -116,7 +117,16 @@ export default function UserProfile() {
 
   const onReport = async (reason, comment) => {
     setReporting(true); setInfo(''); setError('')
-    try { await users.report(id, { reason, comment: comment || null }); setReportModal(false); setInfo('Report submitted. Thank you.') }
+    try {
+      await users.report(id, { reason, comment: comment || null })
+      if (reportAndBlock && !blocked) {
+        await users.block(id)
+        setBlocked(true)
+      }
+      setReportModal(false)
+      setReportAndBlock(false)
+      setInfo(reportAndBlock ? 'Report submitted and user blocked.' : 'Report submitted. Thank you.')
+    }
     catch (err) { setError(err.message || 'Failed to report') }
     finally { setReporting(false) }
   }
@@ -357,6 +367,15 @@ export default function UserProfile() {
                 </button>
               ))}
             </div>
+            <label className="mt-3 flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={reportAndBlock}
+                onChange={(e) => setReportAndBlock(e.target.checked)}
+                className="rounded border-slate-300 text-rose-500 focus:ring-rose-500"
+              />
+              Block this user too
+            </label>
             <button onClick={() => setReportModal(false)} className="mt-4 w-full py-2 text-slate-600 hover:text-slate-800">
               Cancel
             </button>

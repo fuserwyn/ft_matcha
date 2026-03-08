@@ -5,6 +5,7 @@ import ProfileModal from '../components/ProfileModal'
 
 const GENDERS = ['male', 'female', 'non-binary', 'other']
 const INTERESTS = ['male', 'female', 'both', 'other']
+const PAGE_SIZE = 24
 
 // Module-level cache — survives React unmount/remount within the same session
 let cache = null
@@ -26,6 +27,9 @@ const defaultFilters = {
 export default function Discovery() {
   const [list, setList] = useState(() => cache?.list || [])
   const [loading, setLoading] = useState(!cache)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(() => (cache?.hasMore ?? true))
+  const [offset, setOffset] = useState(() => (cache?.offset ?? (cache?.list?.length || 0)))
   const [selectedUserId, setSelectedUserId] = useState(null)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [tagSuggestions, setTagSuggestions] = useState([])
@@ -54,6 +58,8 @@ export default function Discovery() {
       cache = {
         list,
         filters,
+        offset,
+        hasMore,
         scrollY: window.scrollY,
       }
     }
@@ -65,28 +71,40 @@ export default function Discovery() {
       .catch(() => {})
   }, [])
 
-  const load = async (f) => {
-    setLoading(true)
+  const buildParams = (f, currentOffset) => {
+    const params = {}
+    if (f.genders?.length > 0) params.gender = f.genders.join(',')
+    if (f.interests?.length > 0) params.interest = f.interests.join(',')
+    if (f.min_age) params.min_age = f.min_age
+    if (f.max_age) params.max_age = f.max_age
+    if (f.min_fame) params.min_fame = f.min_fame
+    if (f.max_fame) params.max_fame = f.max_fame
+    if (f.city) params.city = f.city
+    if (f.tags) params.tags = f.tags
+    if (f.max_distance_km) params.max_distance_km = f.max_distance_km
+    if (f.sort_by) params.sort_by = f.sort_by
+    if (f.sort_order) params.sort_order = f.sort_order
+    params.limit = PAGE_SIZE
+    params.offset = currentOffset
+    return params
+  }
+
+  const load = async (f, { append = false, currentOffset = 0 } = {}) => {
+    if (append) setLoadingMore(true)
+    else setLoading(true)
     try {
-      const params = {}
-      if (f.genders?.length > 0) params.gender = f.genders.join(',')
-      if (f.interests?.length > 0) params.interest = f.interests.join(',')
-      if (f.min_age) params.min_age = f.min_age
-      if (f.max_age) params.max_age = f.max_age
-      if (f.min_fame) params.min_fame = f.min_fame
-      if (f.max_fame) params.max_fame = f.max_fame
-      if (f.city) params.city = f.city
-      if (f.tags) params.tags = f.tags
-      if (f.max_distance_km) params.max_distance_km = f.max_distance_km
-      if (f.sort_by) params.sort_by = f.sort_by
-      if (f.sort_order) params.sort_order = f.sort_order
-      params.limit = 500
-      const data = await users.search(params)
-      setList(data)
+      const data = await users.search(buildParams(f, currentOffset))
+      if (append) setList((prev) => [...prev, ...data])
+      else setList(data)
+      const newOffset = currentOffset + data.length
+      setOffset(newOffset)
+      setHasMore(data.length === PAGE_SIZE)
     } catch {
-      setList([])
+      if (!append) setList([])
+      setHasMore(false)
     } finally {
-      setLoading(false)
+      if (append) setLoadingMore(false)
+      else setLoading(false)
     }
   }
 
@@ -102,7 +120,9 @@ export default function Discovery() {
       return
     }
     pendingScroll.current = null // user changed filters, don't restore old scroll
-    load(filters)
+    setOffset(0)
+    setHasMore(true)
+    load(filters, { append: false, currentOffset: 0 })
   }, [
     filters.genders,
     filters.interests,
@@ -163,6 +183,11 @@ export default function Discovery() {
     if (!birthDate) return null
     const diff = Date.now() - new Date(birthDate).getTime()
     return Math.floor(diff / (365.25 * 24 * 60 * 60 * 1000))
+  }
+
+  const handleLoadMore = () => {
+    if (loadingMore || loading || !hasMore) return
+    load(filters, { append: true, currentOffset: offset })
   }
 
   return (
@@ -345,50 +370,64 @@ export default function Discovery() {
           ) : list.length === 0 ? (
             <p className="text-slate-500 text-center py-12">No users found</p>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
-              {list.map((u) => {
-                const displayName = (u.first_name && u.last_name && u.first_name === u.last_name)
-                  ? u.first_name
-                  : [u.first_name, u.last_name].filter(Boolean).join(' ')
-                const initial = (u.first_name?.[0] || u.username?.[0] || '?').toUpperCase()
-                return (
-                  <button key={u.id} type="button"
-                    onClick={() => setSelectedUserId(u.id)}
-                    className="group relative block w-full rounded-2xl overflow-hidden aspect-[3/4] bg-slate-100 hover:shadow-xl transition-shadow active:scale-[0.98] cursor-pointer">
-                    {u.primary_photo_url ? (
-                      <img src={u.primary_photo_url} alt={displayName}
-                        className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
-                        <span className="text-7xl font-bold text-slate-300">{initial}</span>
-                      </div>
-                    )}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-                    {u.fame_rating > 0 && (
-                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/40 backdrop-blur-sm text-amber-300 text-xs font-semibold">
-                        ★ {u.fame_rating}
-                      </div>
-                    )}
-                    <div className="absolute bottom-0 inset-x-0 p-4 text-white">
-                      <div className="font-bold text-lg leading-tight truncate drop-shadow">
-                        {displayName || u.username}{u.birth_date ? `, ${age(u.birth_date)}` : ''}
-                      </div>
-                      {u.city && <div className="text-xs text-white/80 mt-0.5 truncate">📍 {u.city}</div>}
-                      {Array.isArray(u.tags) && u.tags.length > 0 && (
-                        <div className="mt-2 flex flex-wrap gap-1">
-                          {u.tags.slice(0, 3).map((tag) => (
-                            <span key={tag} className="text-[10px] px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded-full">
-                              #{tag}
-                            </span>
-                          ))}
+            <>
+              <div className="grid grid-cols-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-3 sm:gap-4">
+                {list.map((u) => {
+                  const displayName = (u.first_name && u.last_name && u.first_name === u.last_name)
+                    ? u.first_name
+                    : [u.first_name, u.last_name].filter(Boolean).join(' ')
+                  const initial = (u.first_name?.[0] || u.username?.[0] || '?').toUpperCase()
+                  return (
+                    <button key={u.id} type="button"
+                      onClick={() => setSelectedUserId(u.id)}
+                      className="group relative block w-full rounded-2xl overflow-hidden aspect-[3/4] bg-slate-100 hover:shadow-xl transition-shadow active:scale-[0.98] cursor-pointer">
+                      {u.primary_photo_url ? (
+                        <img src={u.primary_photo_url} alt={displayName}
+                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          referrerPolicy="no-referrer" />
+                      ) : (
+                        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
+                          <span className="text-7xl font-bold text-slate-300">{initial}</span>
                         </div>
                       )}
-                    </div>
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
+                      {u.fame_rating > 0 && (
+                        <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/40 backdrop-blur-sm text-amber-300 text-xs font-semibold">
+                          ★ {u.fame_rating}
+                        </div>
+                      )}
+                      <div className="absolute bottom-0 inset-x-0 p-4 text-white">
+                        <div className="font-bold text-lg leading-tight truncate drop-shadow">
+                          {displayName || u.username}{u.birth_date ? `, ${age(u.birth_date)}` : ''}
+                        </div>
+                        {u.city && <div className="text-xs text-white/80 mt-0.5 truncate">📍 {u.city}</div>}
+                        {Array.isArray(u.tags) && u.tags.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-1">
+                            {u.tags.slice(0, 3).map((tag) => (
+                              <span key={tag} className="text-[10px] px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded-full">
+                                #{tag}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+              {hasMore && (
+                <div className="mt-5 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleLoadMore}
+                    disabled={loadingMore}
+                    className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                  >
+                    {loadingMore ? 'Loading...' : 'Load more'}
                   </button>
-                )
-              })}
-            </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 

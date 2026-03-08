@@ -1,6 +1,6 @@
 COMPOSE=docker compose
 
-.PHONY: up down rebuild run logs api-logs ps e2e test dev dev-api dev-infra lan-ip showdb sqli-test sqltest
+.PHONY: up down rebuild run rm logs api-logs ps e2e test dev dev-api dev-infra lan-ip showdb sqli-test sqltest
 
 # Development: hot reload without rebuilding Docker
 dev-infra:
@@ -20,6 +20,12 @@ up:
 
 down:
 	$(COMPOSE) down
+
+# Full Docker cleanup: stop/remove containers, delete volumes and prune system data
+rm:
+	$(COMPOSE) down -v --remove-orphans --timeout 10
+	docker system prune -f
+	docker volume prune -f
 
 rebuild:
 	$(COMPOSE) up -d --build
