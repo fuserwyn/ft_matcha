@@ -274,7 +274,16 @@ export default function UserProfile() {
               <div className="mt-4 flex flex-wrap gap-2">
                 {user.gender && <span className="px-3 py-1 bg-slate-100 rounded-full text-sm text-slate-600">{user.gender}</span>}
                 {user.birth_date && <span className="px-3 py-1 bg-slate-100 rounded-full text-sm text-slate-600">{age(user.birth_date)} years old</span>}
-                {user.sexual_preference && <span className="px-3 py-1 bg-slate-100 rounded-full text-sm text-slate-600">Interested in {user.sexual_preference}</span>}
+                {Array.isArray(user.sexual_preference) && user.sexual_preference.length > 0 && (
+                  <span className="px-3 py-1 bg-slate-100 rounded-full text-sm text-slate-600">
+                    Interested in {user.sexual_preference.join(', ')}
+                  </span>
+                )}
+                {user.relationship_goal && (
+                  <span className="px-3 py-1 bg-rose-50 rounded-full text-sm text-rose-600">
+                    {user.relationship_goal.replace(/-/g, ' ')}
+                  </span>
+                )}
               </div>
 
               {user.city && <p className="mt-3 text-slate-500 text-sm">📍 {user.city}</p>}

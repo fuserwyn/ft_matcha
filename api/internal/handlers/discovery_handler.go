@@ -71,14 +71,15 @@ func (h *DiscoveryHandler) FilterAggregations(c *gin.Context) {
 	if blocked, err := h.blockRepo.ListBlockedIDs(c.Request.Context(), id); err == nil {
 		excludeIDs = blocked
 	}
-	gender, interest, err := h.discoveryRepo.FilterAggregations(c.Request.Context(), id, excludeIDs)
+	gender, interest, relationshipGoal, err := h.discoveryRepo.FilterAggregations(c.Request.Context(), id, excludeIDs)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{
-		"gender":   gender,
-		"interest": interest,
+		"gender":            gender,
+		"interest":          interest,
+		"relationship_goal": relationshipGoal,
 	})
 }
 
@@ -106,16 +107,13 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 	}
 
 	if me, err := h.profileRepo.GetByUserID(c.Request.Context(), id); err == nil && me != nil {
-		// If sexual orientation is not specified, user is treated as bisexual.
-		preference := "both"
-		if me.SexualPreference != nil && *me.SexualPreference != "" {
-			preference = *me.SexualPreference
+		// Default gender filter from user's sexual preference (what they're looking for)
+		if len(me.SexualPreference) > 0 {
+			f.Genders = me.SexualPreference
 		}
-		if preference != "both" {
-			f.Genders = []string{preference}
-		}
+		// Reciprocity: only show users whose interested_in includes the current user's gender
 		if me.Gender != nil && *me.Gender != "" {
-			f.Interests = []string{*me.Gender}
+			f.ReciprocityUserGender = *me.Gender
 		}
 		if me.Latitude != nil && me.Longitude != nil {
 			f.UserLat = me.Latitude
@@ -132,7 +130,8 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 		f.Genders = parseCommaList(v)
 	}
 	if v := c.Query("interest"); v != "" {
-		f.Interests = parseCommaList(v)
+		// "Interested in male" = show profiles whose gender is male
+		f.Genders = parseCommaList(v)
 	}
 	if v := c.Query("min_age"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
@@ -172,6 +171,9 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
 			f.MaxDistanceKm = n
 		}
+	}
+	if v := c.Query("relationship_goal"); v != "" {
+		f.RelationshipGoals = parseCommaList(v)
 	}
 	if v := c.Query("sort_by"); v != "" {
 		f.SortBy = v
@@ -250,8 +252,11 @@ func (h *DiscoveryHandler) GetByID(c *gin.Context) {
 		if p.Gender != nil {
 			resp["gender"] = *p.Gender
 		}
-		if p.SexualPreference != nil {
-			resp["sexual_preference"] = *p.SexualPreference
+		if len(p.SexualPreference) > 0 {
+			resp["sexual_preference"] = p.SexualPreference
+		}
+		if p.RelationshipGoal != nil {
+			resp["relationship_goal"] = *p.RelationshipGoal
 		}
 		if p.BirthDate != nil {
 			resp["birth_date"] = p.BirthDate.Format("2006-01-02")
@@ -327,6 +332,12 @@ func toUserCardResp(c *repository.UserCard) gin.H {
 	}
 	if c.Gender != nil {
 		resp["gender"] = *c.Gender
+	}
+	if len(c.SexualPreference) > 0 {
+		resp["sexual_preference"] = c.SexualPreference
+	}
+	if c.RelationshipGoal != nil {
+		resp["relationship_goal"] = *c.RelationshipGoal
 	}
 	if c.BirthDate != nil {
 		resp["birth_date"] = c.BirthDate.Format("2006-01-02")

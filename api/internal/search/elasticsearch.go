@@ -22,13 +22,15 @@ type UserDoc struct {
 	FirstName        string    `json:"first_name"`
 	LastName         string    `json:"last_name"`
 	Gender           string    `json:"gender,omitempty"`
-	SexualPreference string    `json:"sexual_preference,omitempty"`
+	SexualPreference []string  `json:"sexual_preference,omitempty"`
+	RelationshipGoal string    `json:"relationship_goal,omitempty"`
 	BirthDate        string    `json:"birth_date,omitempty"`
 	Bio              string    `json:"bio,omitempty"`
 	City             string    `json:"city,omitempty"`
 	Tags             []string  `json:"tags,omitempty"`
 	FameRating       int       `json:"fame_rating"`
 	Location         *GeoPoint `json:"location,omitempty"`
+	LastOnline       string    `json:"last_online,omitempty"`
 	CreatedAt        string    `json:"created_at"`
 }
 
@@ -38,25 +40,27 @@ type GeoPoint struct {
 }
 
 type SearchFilters struct {
-	ExcludeID     uuid.UUID
-	ExcludeIDs    []uuid.UUID
-	Genders       []string // multiple: male, female, etc.
-	Interests     []string // multiple: male, female, both, etc.
-	Tags          []string
-	StrictTags    bool
-	City          string
-	PreferredCity string
-	MinAge        int
-	MaxAge        int
-	MinFame       int
-	MaxFame       int
-	UserLat       *float64
-	UserLon       *float64
-	MaxDistanceKm int
-	SortBy        string
-	SortOrder     string
-	Limit         int
-	Offset        int
+	ExcludeID            uuid.UUID
+	ExcludeIDs           []uuid.UUID
+	Genders              []string // multiple: male, female, etc.
+	Interests            []string // multiple: male, female, non-binary, other
+	RelationshipGoals    []string // multiple relationship goal values
+	ReciprocityUserGender string  // current user's gender — only show users whose sexual_preference includes it
+	Tags                 []string
+	StrictTags           bool
+	City                 string
+	PreferredCity        string
+	MinAge               int
+	MaxAge               int
+	MinFame              int
+	MaxFame              int
+	UserLat              *float64
+	UserLon              *float64
+	MaxDistanceKm        int
+	SortBy               string
+	SortOrder            string
+	Limit                int
+	Offset               int
 }
 
 type Client struct {
@@ -90,12 +94,14 @@ func (c *Client) EnsureIndex(ctx context.Context) error {
 				"last_name": { "type": "text" },
 				"gender": { "type": "keyword" },
 				"sexual_preference": { "type": "keyword" },
+				"relationship_goal": { "type": "keyword" },
 				"birth_date": { "type": "date", "format": "yyyy-MM-dd" },
 				"bio": { "type": "text" },
 				"city": { "type": "keyword" },
 				"tags": { "type": "keyword" },
 				"fame_rating": { "type": "integer" },
 				"location": { "type": "geo_point" },
+				"last_online": { "type": "date" },
 				"created_at": { "type": "date" }
 			}
 		}
@@ -273,7 +279,7 @@ func (c *Client) SearchTags(ctx context.Context, prefix string, limit int) ([]st
 	return tags, nil
 }
 
-func (c *Client) FilterAggregations(ctx context.Context, excludeID uuid.UUID, excludeIDs []uuid.UUID) (gender map[string]int64, interest map[string]int64, err error) {
+func (c *Client) FilterAggregations(ctx context.Context, excludeID uuid.UUID, excludeIDs []uuid.UUID) (gender map[string]int64, interest map[string]int64, relationshipGoal map[string]int64, err error) {
 	mustNot := []map[string]interface{}{
 		{"term": map[string]interface{}{"user_id": excludeID.String()}},
 	}
@@ -304,11 +310,18 @@ func (c *Client) FilterAggregations(ctx context.Context, excludeID uuid.UUID, ex
 					"order": map[string]interface{}{"_key": "asc"},
 				},
 			},
+			"relationship_goal": map[string]interface{}{
+				"terms": map[string]interface{}{
+					"field": "relationship_goal",
+					"size":  20,
+					"order": map[string]interface{}{"_key": "asc"},
+				},
+			},
 		},
 	}
 	body, err := json.Marshal(query)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	req := esapi.SearchRequest{
 		Index: []string{IndexName},
@@ -316,11 +329,11 @@ func (c *Client) FilterAggregations(ctx context.Context, excludeID uuid.UUID, ex
 	}
 	res, err := req.Do(ctx, c.es)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	defer res.Body.Close()
 	if res.IsError() {
-		return nil, nil, fmt.Errorf("filter aggregations: %s", res.String())
+		return nil, nil, nil, fmt.Errorf("filter aggregations: %s", res.String())
 	}
 	var result struct {
 		Aggregations struct {
@@ -336,10 +349,16 @@ func (c *Client) FilterAggregations(ctx context.Context, excludeID uuid.UUID, ex
 					Count int64  `json:"doc_count"`
 				} `json:"buckets"`
 			} `json:"sexual_preference"`
+			RelationshipGoal struct {
+				Buckets []struct {
+					Key   string `json:"key"`
+					Count int64  `json:"doc_count"`
+				} `json:"buckets"`
+			} `json:"relationship_goal"`
 		} `json:"aggregations"`
 	}
 	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	gender = make(map[string]int64)
 	for _, b := range result.Aggregations.Gender.Buckets {
@@ -353,7 +372,13 @@ func (c *Client) FilterAggregations(ctx context.Context, excludeID uuid.UUID, ex
 			interest[b.Key] = b.Count
 		}
 	}
-	return gender, interest, nil
+	relationshipGoal = make(map[string]int64)
+	for _, b := range result.Aggregations.RelationshipGoal.Buckets {
+		if b.Key != "" {
+			relationshipGoal[b.Key] = b.Count
+		}
+	}
+	return gender, interest, relationshipGoal, nil
 }
 
 func (c *Client) Delete(ctx context.Context, userID string) error {
@@ -400,14 +425,26 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 			})
 		}
 	}
+	// Reciprocity: only show users whose sexual_preference includes the current user's gender
+	if f.ReciprocityUserGender != "" {
+		must = append(must, map[string]interface{}{
+			"term": map[string]interface{}{"sexual_preference": f.ReciprocityUserGender},
+		})
+	}
 	if len(f.Interests) > 0 {
-		if len(f.Interests) == 1 {
+		// Filter to users whose sexual_preference array contains at least one of the requested interests
+		must = append(must, map[string]interface{}{
+			"terms": map[string]interface{}{"sexual_preference": f.Interests},
+		})
+	}
+	if len(f.RelationshipGoals) > 0 {
+		if len(f.RelationshipGoals) == 1 {
 			must = append(must, map[string]interface{}{
-				"term": map[string]interface{}{"sexual_preference": f.Interests[0]},
+				"term": map[string]interface{}{"relationship_goal": f.RelationshipGoals[0]},
 			})
 		} else {
 			must = append(must, map[string]interface{}{
-				"terms": map[string]interface{}{"sexual_preference": f.Interests},
+				"terms": map[string]interface{}{"relationship_goal": f.RelationshipGoals},
 			})
 		}
 	}
@@ -551,6 +588,11 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 		}
 	}
 	switch f.SortBy {
+	case "last_online":
+		sort = []map[string]interface{}{
+			{"last_online": map[string]interface{}{"order": "desc", "missing": "_last"}},
+			{"fame_rating": map[string]interface{}{"order": "desc"}},
+		}
 	case "age":
 		// older age = earlier birth_date; asc = younger first, desc = older first
 		if sortOrder == "asc" {

@@ -15,7 +15,8 @@ const (
 
 var (
 	GenderValues           = []string{"male", "female", "non-binary", "other"}
-	SexualPreferenceValues = []string{"male", "female", "both", "other"}
+	SexualPreferenceValues = []string{"male", "female", "non-binary", "other"}
+	RelationshipGoalValues = []string{"long-term", "long-term-open", "short-term-open", "short-term", "friends", "not-sure"}
 )
 
 func ValidateBirthDate(s string) error {
@@ -52,16 +53,32 @@ func ValidateGender(s string) error {
 	return fmt.Errorf("gender: must be one of %v", GenderValues)
 }
 
-func ValidateSexualPreference(s string) error {
+func ValidateSexualPreference(values []string) error {
+	for _, s := range values {
+		valid := false
+		for _, v := range SexualPreferenceValues {
+			if s == v {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return fmt.Errorf("sexual_preference: each value must be one of %v", SexualPreferenceValues)
+		}
+	}
+	return nil
+}
+
+func ValidateRelationshipGoal(s string) error {
 	if s == "" {
 		return nil
 	}
-	for _, v := range SexualPreferenceValues {
+	for _, v := range RelationshipGoalValues {
 		if s == v {
 			return nil
 		}
 	}
-	return fmt.Errorf("sexual_preference: must be one of %v", SexualPreferenceValues)
+	return fmt.Errorf("relationship_goal: must be one of %v", RelationshipGoalValues)
 }
 
 func ValidateBio(s string) error {

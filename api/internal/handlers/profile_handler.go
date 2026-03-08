@@ -32,7 +32,8 @@ func NewProfileHandler(profileRepo *repository.ProfileRepository, photoRepo *rep
 type UpdateProfileReq struct {
 	Bio              *string  `json:"bio"`               // max 500 chars
 	Gender           *string  `json:"gender"`            // male, female, non-binary, other
-	SexualPreference *string  `json:"sexual_preference"` // male, female, both, other
+	SexualPreference []string `json:"sexual_preference"` // array: male, female, non-binary, other
+	RelationshipGoal *string  `json:"relationship_goal"` // long-term, long-term-open, short-term-open, short-term, friends, not-sure
 	BirthDate        *string  `json:"birth_date"`        // YYYY-MM-DD, past, 18+
 	City             *string  `json:"city"`              // manually entered city
 	Latitude         *float64 `json:"latitude"`          // -90 to 90
@@ -111,8 +112,14 @@ func (h *ProfileHandler) UpdateMe(c *gin.Context) {
 			return
 		}
 	}
-	if req.SexualPreference != nil && *req.SexualPreference != "" {
-		if err := validation.ValidateSexualPreference(*req.SexualPreference); err != nil {
+	if len(req.SexualPreference) > 0 {
+		if err := validation.ValidateSexualPreference(req.SexualPreference); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+	if req.RelationshipGoal != nil && *req.RelationshipGoal != "" {
+		if err := validation.ValidateRelationshipGoal(*req.RelationshipGoal); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -147,6 +154,7 @@ func (h *ProfileHandler) UpdateMe(c *gin.Context) {
 		Bio:              req.Bio,
 		Gender:           req.Gender,
 		SexualPreference: req.SexualPreference,
+		RelationshipGoal: req.RelationshipGoal,
 		City:             req.City,
 		Latitude:         req.Latitude,
 		Longitude:        req.Longitude,
@@ -399,8 +407,11 @@ func toProfileResp(p *repository.Profile) gin.H {
 	if p.Gender != nil {
 		resp["gender"] = *p.Gender
 	}
-	if p.SexualPreference != nil {
-		resp["sexual_preference"] = *p.SexualPreference
+	if len(p.SexualPreference) > 0 {
+		resp["sexual_preference"] = p.SexualPreference
+	}
+	if p.RelationshipGoal != nil {
+		resp["relationship_goal"] = *p.RelationshipGoal
 	}
 	if p.BirthDate != nil {
 		resp["birth_date"] = p.BirthDate.Format("2006-01-02")

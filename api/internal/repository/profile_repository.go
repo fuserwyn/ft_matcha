@@ -13,7 +13,8 @@ type Profile struct {
 	UserID           uuid.UUID
 	Bio              *string
 	Gender           *string
-	SexualPreference *string
+	SexualPreference []string
+	RelationshipGoal *string
 	BirthDate        *time.Time
 	City             *string
 	Latitude         *float64
@@ -71,7 +72,7 @@ func (r *ProfileRepository) CountByGender(ctx context.Context) (male int, female
 func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (*Profile, error) {
 	var p Profile
 	err := r.pool.QueryRow(ctx, `
-		SELECT user_id, bio, gender, sexual_preference, birth_date,
+		SELECT user_id, bio, gender, sexual_preference, relationship_goal, birth_date,
 		       city, latitude, longitude, fame_rating, created_at, updated_at
 		FROM profiles WHERE user_id = $1
 	`, userID).Scan(
@@ -79,6 +80,7 @@ func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 		&p.Bio,
 		&p.Gender,
 		&p.SexualPreference,
+		&p.RelationshipGoal,
 		&p.BirthDate,
 		&p.City,
 		&p.Latitude,
@@ -94,20 +96,26 @@ func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 }
 
 func (r *ProfileRepository) Upsert(ctx context.Context, p *Profile) error {
+	// Pass nil for empty sexual_preference so COALESCE keeps the existing value
+	var sp interface{}
+	if len(p.SexualPreference) > 0 {
+		sp = p.SexualPreference
+	}
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO profiles (user_id, bio, gender, sexual_preference, birth_date,
+		INSERT INTO profiles (user_id, bio, gender, sexual_preference, relationship_goal, birth_date,
 		                     city, latitude, longitude, fame_rating, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
 		ON CONFLICT (user_id) DO UPDATE SET
 			bio = COALESCE(EXCLUDED.bio, profiles.bio),
 			gender = COALESCE(EXCLUDED.gender, profiles.gender),
 			sexual_preference = COALESCE(EXCLUDED.sexual_preference, profiles.sexual_preference),
+			relationship_goal = COALESCE(EXCLUDED.relationship_goal, profiles.relationship_goal),
 			birth_date = COALESCE(EXCLUDED.birth_date, profiles.birth_date),
 			city = COALESCE(EXCLUDED.city, profiles.city),
 			latitude = COALESCE(EXCLUDED.latitude, profiles.latitude),
 			longitude = COALESCE(EXCLUDED.longitude, profiles.longitude),
 			updated_at = NOW()
-	`, p.UserID, p.Bio, p.Gender, p.SexualPreference, p.BirthDate,
+	`, p.UserID, p.Bio, p.Gender, sp, p.RelationshipGoal, p.BirthDate,
 		p.City, p.Latitude, p.Longitude, p.FameRating)
 	return err
 }
