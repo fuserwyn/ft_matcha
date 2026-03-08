@@ -1,14 +1,23 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { auth, photos, profile } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import CityInput from '../components/CityInput'
 import PhotoCropper from '../components/PhotoCropper'
 
 const GENDERS = ['male', 'female', 'non-binary', 'other']
-const PREFERENCES = ['male', 'female', 'both', 'other']
+const PREFERENCES = ['male', 'female', 'non-binary', 'other']
+const RELATIONSHIP_GOALS = [
+  { value: 'long-term', label: 'Long-term' },
+  { value: 'long-term-open', label: 'Long-term, open to short' },
+  { value: 'short-term-open', label: 'Short-term, open to long' },
+  { value: 'short-term', label: 'Short-term' },
+  { value: 'friends', label: 'Friends' },
+  { value: 'not-sure', label: 'Not sure yet' },
+]
 
 export default function Profile() {
   const { updateUser } = useAuth()
+  const cityInputRef = useRef(null)
   const [account, setAccount] = useState({
     username: '',
     email: '',
@@ -18,7 +27,8 @@ export default function Profile() {
   const [data, setData] = useState({
     bio: '',
     gender: '',
-    sexual_preference: '',
+    sexual_preference: [],
+    relationship_goal: '',
     birth_date: '',
     city: '',
     latitude: '',
@@ -52,7 +62,8 @@ export default function Profile() {
         setData({
           bio: p.bio || '',
           gender: p.gender || '',
-          sexual_preference: p.sexual_preference || '',
+          sexual_preference: Array.isArray(p.sexual_preference) ? p.sexual_preference : [],
+          relationship_goal: p.relationship_goal || '',
           birth_date: p.birth_date || '',
           city: p.city || '',
           latitude: p.latitude ?? '',
@@ -114,7 +125,8 @@ export default function Profile() {
     const payload = {}
     if (data.bio) payload.bio = data.bio
     if (data.gender) payload.gender = data.gender
-    if (data.sexual_preference) payload.sexual_preference = data.sexual_preference
+    if (data.sexual_preference.length > 0) payload.sexual_preference = data.sexual_preference
+    if (data.relationship_goal) payload.relationship_goal = data.relationship_goal
     if (data.birth_date) payload.birth_date = data.birth_date
     if (data.city) payload.city = data.city
     if (data.latitude !== '') payload.latitude = parseFloat(data.latitude)
@@ -174,6 +186,7 @@ export default function Profile() {
             place.address?.county ||
             ''
           if (city) {
+            cityInputRef.current?.suppressNext()
             setData((d) => ({ ...d, latitude: String(latitude), longitude: String(longitude), city }))
             setMessage(`Location set to ${city}`)
           } else {
@@ -192,6 +205,7 @@ export default function Profile() {
             const data = await res.json()
             if (data.latitude && data.longitude) {
               const city = data.city || ''
+              if (city) cityInputRef.current?.suppressNext()
               setData((d) => ({
                 ...d,
                 latitude: String(data.latitude),
@@ -408,22 +422,58 @@ export default function Profile() {
                 placeholder="Tell us about yourself..." />
               <p className="text-xs text-slate-500 mt-1">{data.bio.length}/500</p>
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Gender</label>
-                <select name="gender" value={data.gender} onChange={handleChange}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none">
-                  <option value="">Select</option>
-                  {GENDERS.map((g) => <option key={g} value={g}>{g}</option>)}
-                </select>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Gender</label>
+              <div className="flex flex-wrap gap-2">
+                {GENDERS.map((g) => (
+                  <button key={g} type="button"
+                    onClick={() => setData((d) => ({ ...d, gender: d.gender === g ? '' : g }))}
+                    className={`px-3 py-1.5 rounded-full border text-sm transition ${
+                      data.gender === g
+                        ? 'border-rose-400 bg-rose-50 text-rose-700'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}>
+                    {g}
+                  </button>
+                ))}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Interested in</label>
-                <select name="sexual_preference" value={data.sexual_preference} onChange={handleChange}
-                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none">
-                  <option value="">Select</option>
-                  {PREFERENCES.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Interested in</label>
+              <div className="flex flex-wrap gap-2">
+                {PREFERENCES.map((p) => (
+                  <button key={p} type="button"
+                    onClick={() => setData((d) => ({
+                      ...d,
+                      sexual_preference: d.sexual_preference.includes(p)
+                        ? d.sexual_preference.filter((x) => x !== p)
+                        : [...d.sexual_preference, p],
+                    }))}
+                    className={`px-3 py-1.5 rounded-full border text-sm transition ${
+                      data.sexual_preference.includes(p)
+                        ? 'border-rose-400 bg-rose-50 text-rose-700'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}>
+                    {p}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-slate-400 mt-1">Select all that apply</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-2">Looking for</label>
+              <div className="flex flex-wrap gap-2">
+                {RELATIONSHIP_GOALS.map((rg) => (
+                  <button key={rg.value} type="button"
+                    onClick={() => setData((d) => ({ ...d, relationship_goal: d.relationship_goal === rg.value ? '' : rg.value }))}
+                    className={`px-3 py-1.5 rounded-full border text-sm transition ${
+                      data.relationship_goal === rg.value
+                        ? 'border-rose-400 bg-rose-50 text-rose-700'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}>
+                    {rg.label}
+                  </button>
+                ))}
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -437,6 +487,7 @@ export default function Profile() {
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Location</label>
                 <CityInput
+                  ref={cityInputRef}
                   value={data.city}
                   onChange={(val) => setData((d) => ({ ...d, city: val }))}
                   placeholder="Paris, France"

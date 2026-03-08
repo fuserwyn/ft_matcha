@@ -3,16 +3,33 @@ import { users, profile } from '../api/client'
 import CityInput from '../components/CityInput'
 import ProfileModal from '../components/ProfileModal'
 
-const GENDERS = ['male', 'female', 'non-binary', 'other']
-const INTERESTS = ['male', 'female', 'both', 'other']
-const PAGE_SIZE = 24
+const INTERESTS = ['male', 'female', 'non-binary', 'other']
+const RELATIONSHIP_GOALS = [
+  { value: 'long-term', label: 'Long-term' },
+  { value: 'long-term-open', label: 'Long-term open' },
+  { value: 'short-term-open', label: 'Short-term open' },
+  { value: 'short-term', label: 'Short-term' },
+  { value: 'friends', label: 'Friends' },
+  { value: 'not-sure', label: 'Not sure' },
+]
+
+const GOAL_LABELS = {
+  'long-term': 'Long-Term',
+  'long-term-open': 'Long-Term, open to short',
+  'short-term-open': 'Short-Term, open to long',
+  'short-term': 'Short-Term',
+  'friends': 'Friends',
+  'not-sure': 'Not sure',
+}
+
+const PAGE_SIZE = 48
 
 // Module-level cache — survives React unmount/remount within the same session
 let cache = null
 
 const defaultFilters = {
-  genders: [],
   interests: [],
+  relationship_goals: [],
   min_age: '',
   max_age: '',
   min_fame: '',
@@ -34,7 +51,7 @@ export default function Discovery() {
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [tagSuggestions, setTagSuggestions] = useState([])
   const [tagSuggestionsOpen, setTagSuggestionsOpen] = useState(false)
-  const [aggregations, setAggregations] = useState({ gender: {}, interest: {} })
+  const [aggregations, setAggregations] = useState({ gender: {}, interest: {}, relationship_goal: {} })
   const [filters, setFilters] = useState(() => cache?.filters || defaultFilters)
 
   // pendingScroll: set when restoring from cache, consumed once list renders
@@ -65,16 +82,19 @@ export default function Discovery() {
     }
   })
 
+  // Initial mount: fetch aggregations and load results if no cache
   useEffect(() => {
     users.filterAggregations()
-      .then((r) => setAggregations({ gender: r.gender || {}, interest: r.interest || {} }))
+      .then((r) => setAggregations({ gender: r.gender || {}, interest: r.interest || {}, relationship_goal: r.relationship_goal || {} }))
       .catch(() => {})
+
+    if (!cache) load(defaultFilters)
   }, [])
 
   const buildParams = (f, currentOffset) => {
     const params = {}
-    if (f.genders?.length > 0) params.gender = f.genders.join(',')
     if (f.interests?.length > 0) params.interest = f.interests.join(',')
+    if (f.relationship_goals?.length > 0) params.relationship_goal = f.relationship_goals.join(',')
     if (f.min_age) params.min_age = f.min_age
     if (f.max_age) params.max_age = f.max_age
     if (f.min_fame) params.min_fame = f.min_fame
@@ -108,12 +128,7 @@ export default function Discovery() {
     }
   }
 
-  // Initial load — only if no cache
-  useEffect(() => {
-    if (!cache) load(filters)
-  }, [])
-
-  // Reload when filters change (skip initial mount)
+  // Reload when filters change (skip initial mount and profile pre-population)
   useEffect(() => {
     if (initialMount.current) {
       initialMount.current = false
@@ -124,8 +139,8 @@ export default function Discovery() {
     setHasMore(true)
     load(filters, { append: false, currentOffset: 0 })
   }, [
-    filters.genders,
     filters.interests,
+    filters.relationship_goals,
     filters.min_age,
     filters.max_age,
     filters.min_fame,
@@ -159,16 +174,16 @@ export default function Discovery() {
     setFilters((f) => ({ ...f, [name]: value }))
   }
 
-  const toggleGender = (g) => {
-    setFilters((f) => ({
-      ...f,
-      genders: f.genders?.includes(g) ? f.genders.filter((x) => x !== g) : [...(f.genders || []), g],
-    }))
-  }
   const toggleInterest = (i) => {
     setFilters((f) => ({
       ...f,
       interests: f.interests?.includes(i) ? f.interests.filter((x) => x !== i) : [...(f.interests || []), i],
+    }))
+  }
+  const toggleRelationshipGoal = (g) => {
+    setFilters((f) => ({
+      ...f,
+      relationship_goals: f.relationship_goals?.includes(g) ? f.relationship_goals.filter((x) => x !== g) : [...(f.relationship_goals || []), g],
     }))
   }
 
@@ -214,30 +229,9 @@ export default function Discovery() {
 
             <div className="p-4 space-y-5">
 
-              {/* Gender */}
+              {/* Interested in */}
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Gender</p>
-                <div className="flex flex-wrap gap-2">
-                  {GENDERS.map((g) => (
-                    <label key={g} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-sm cursor-pointer transition ${
-                      filters.genders?.includes(g)
-                        ? 'border-rose-400 bg-rose-50 text-rose-700'
-                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
-                    }`}>
-                      <input type="checkbox" checked={filters.genders?.includes(g) || false}
-                        onChange={() => toggleGender(g)} className="sr-only" />
-                      {g}
-                      {aggregations.gender[g] != null && (
-                        <span className="text-xs opacity-60">({aggregations.gender[g]})</span>
-                      )}
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              {/* Looking for */}
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Looking for</p>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Interested in</p>
                 <div className="flex flex-wrap gap-2">
                   {INTERESTS.map((i) => (
                     <label key={i} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-sm cursor-pointer transition ${
@@ -248,9 +242,24 @@ export default function Discovery() {
                       <input type="checkbox" checked={filters.interests?.includes(i) || false}
                         onChange={() => toggleInterest(i)} className="sr-only" />
                       {i}
-                      {aggregations.interest[i] != null && (
-                        <span className="text-xs opacity-60">({aggregations.interest[i]})</span>
-                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              {/* Looking for (relationship goal) */}
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Looking for</p>
+                <div className="flex flex-wrap gap-2">
+                  {RELATIONSHIP_GOALS.map((rg) => (
+                    <label key={rg.value} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-sm cursor-pointer transition ${
+                      filters.relationship_goals?.includes(rg.value)
+                        ? 'border-rose-400 bg-rose-50 text-rose-700'
+                        : 'border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}>
+                      <input type="checkbox" checked={filters.relationship_goals?.includes(rg.value) || false}
+                        onChange={() => toggleRelationshipGoal(rg.value)} className="sr-only" />
+                      {rg.label}
                     </label>
                   ))}
                 </div>
@@ -338,23 +347,16 @@ export default function Discovery() {
 
               {/* Sort */}
               <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Sort</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <select name="sort_by" value={filters.sort_by} onChange={handleFilterChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300">
-                    <option value="">Relevance</option>
-                    <option value="age">Age</option>
-                    <option value="location">Location</option>
-                    <option value="fame">Fame</option>
-                    <option value="tags">Tags</option>
-                  </select>
-                  <select name="sort_order" value={filters.sort_order} onChange={handleFilterChange}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300">
-                    <option value="">Default</option>
-                    <option value="asc">ASC</option>
-                    <option value="desc">DESC</option>
-                  </select>
-                </div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Sort by</p>
+                <select name="sort_by" value={filters.sort_by} onChange={handleFilterChange}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300">
+                  <option value="">Relevance</option>
+                  <option value="last_online">Recently Online</option>
+                  <option value="location">Closest to Me</option>
+                  <option value="fame">Fame Rating</option>
+                  <option value="age">Age</option>
+                  <option value="tags">Common Tags</option>
+                </select>
               </div>
 
             </div>
@@ -391,16 +393,26 @@ export default function Discovery() {
                         </div>
                       )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/10 to-transparent" />
-                      {u.fame_rating > 0 && (
-                        <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/40 backdrop-blur-sm text-amber-300 text-xs font-semibold">
-                          ★ {u.fame_rating}
-                        </div>
-                      )}
+                      <div className="absolute top-3 left-3 right-3 flex justify-between items-start gap-2">
+                        {u.relationship_goal && GOAL_LABELS[u.relationship_goal] && (
+                          <span className="px-2 py-0.5 rounded-full bg-rose-500/80 backdrop-blur-sm text-white text-[10px] font-medium">
+                            {GOAL_LABELS[u.relationship_goal]}
+                          </span>
+                        )}
+                        {u.fame_rating > 0 && (
+                          <span className="ml-auto px-2 py-0.5 rounded-full bg-black/40 backdrop-blur-sm text-amber-300 text-xs font-semibold">
+                            ★ {u.fame_rating}
+                          </span>
+                        )}
+                      </div>
                       <div className="absolute bottom-0 inset-x-0 p-4 text-white">
                         <div className="font-bold text-lg leading-tight truncate drop-shadow">
                           {displayName || u.username}{u.birth_date ? `, ${age(u.birth_date)}` : ''}
                         </div>
                         {u.city && <div className="text-xs text-white/80 mt-0.5 truncate">📍 {u.city}</div>}
+                        {u.gender && (
+                          <div className="text-[10px] text-white/60 mt-0.5">{u.gender}</div>
+                        )}
                         {Array.isArray(u.tags) && u.tags.length > 0 && (
                           <div className="mt-2 flex flex-wrap gap-1">
                             {u.tags.slice(0, 3).map((tag) => (

@@ -7,23 +7,36 @@ const NotificationsContext = createContext(null)
 export function NotificationsProvider({ children }) {
   const { user } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
+  const [likesCount, setLikesCount] = useState(0)
+  const [matchesCount, setMatchesCount] = useState(0)
+  const [viewsCount, setViewsCount] = useState(0)
 
   const refreshUnread = useCallback(async () => {
     if (!user) {
       setUnreadCount(0)
+      setLikesCount(0)
+      setMatchesCount(0)
+      setViewsCount(0)
       return
     }
     try {
       const data = await notifications.list({ unread_only: true, limit: 100 })
-      setUnreadCount(Array.isArray(data) ? data.length : 0)
+      if (!Array.isArray(data)) return
+      setUnreadCount(data.length)
+      setLikesCount(data.filter((n) => n.type === 'like').length)
+      setMatchesCount(data.filter((n) => n.type === 'match').length)
+      setViewsCount(data.filter((n) => n.type === 'view').length)
     } catch {
-      // keep previous count on transient errors
+      // keep previous counts on transient errors
     }
   }, [user])
 
   useEffect(() => {
     if (!user) {
       setUnreadCount(0)
+      setLikesCount(0)
+      setMatchesCount(0)
+      setViewsCount(0)
       return undefined
     }
 
@@ -61,10 +74,13 @@ export function NotificationsProvider({ children }) {
   const value = useMemo(
     () => ({
       unreadCount,
+      likesCount,
+      matchesCount,
+      viewsCount,
       refreshUnread,
       setUnreadCount,
     }),
-    [unreadCount, refreshUnread],
+    [unreadCount, likesCount, matchesCount, viewsCount, refreshUnread],
   )
 
   return <NotificationsContext.Provider value={value}>{children}</NotificationsContext.Provider>

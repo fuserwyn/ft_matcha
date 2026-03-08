@@ -6,7 +6,7 @@ import GlobalCallBanner from './GlobalCallBanner'
 
 export function Layout({ children }) {
   const { user, logout } = useAuth()
-  const { unreadCount } = useNotifications()
+  const { unreadCount, likesCount, matchesCount, viewsCount } = useNotifications()
   const navigate = useNavigate()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
@@ -23,14 +23,29 @@ export function Layout({ children }) {
       <Link to="/discover" className="text-slate-600 hover:text-rose-600 transition py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center" onClick={closeMobileMenu}>
         Discover
       </Link>
-      <Link to="/matches" className="text-slate-600 hover:text-rose-600 transition py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center" onClick={closeMobileMenu}>
+      <Link to="/matches" className="text-slate-600 hover:text-rose-600 transition py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center gap-1" onClick={closeMobileMenu}>
         Matches
+        {matchesCount > 0 && (
+          <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-rose-500 text-white text-xs font-semibold">
+            {matchesCount > 99 ? '99+' : matchesCount}
+          </span>
+        )}
       </Link>
-      <Link to="/likes" className="text-slate-600 hover:text-rose-600 transition py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center" onClick={closeMobileMenu}>
+      <Link to="/likes" className="text-slate-600 hover:text-rose-600 transition py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center gap-1" onClick={closeMobileMenu}>
         Likes
+        {likesCount > 0 && (
+          <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-rose-500 text-white text-xs font-semibold">
+            {likesCount > 99 ? '99+' : likesCount}
+          </span>
+        )}
       </Link>
-      <Link to="/views" className="text-slate-600 hover:text-rose-600 transition py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center" onClick={closeMobileMenu}>
+      <Link to="/views" className="text-slate-600 hover:text-rose-600 transition py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center gap-1" onClick={closeMobileMenu}>
         Views
+        {viewsCount > 0 && (
+          <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1 rounded-full bg-rose-500 text-white text-xs font-semibold">
+            {viewsCount > 99 ? '99+' : viewsCount}
+          </span>
+        )}
       </Link>
       <Link to="/notifications" className="text-slate-600 hover:text-rose-600 transition relative py-3 lg:py-0 min-h-[44px] lg:min-h-0 flex items-center" onClick={closeMobileMenu}>
         Notifications

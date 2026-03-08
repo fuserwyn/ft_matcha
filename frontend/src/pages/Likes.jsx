@@ -77,12 +77,16 @@ export default function Likes() {
     setError('')
     try {
       await users.like(userId)
-      setItems((prev) => prev.filter((u) => u.id !== userId))
     } catch (err) {
-      setError(err.message || 'Failed to like')
-    } finally {
-      setActionId(null)
+      // 409 "already liked" means they're already a match — still remove the card
+      if (!(err.message || '').toLowerCase().includes('already')) {
+        setError(err.message || 'Failed to like')
+        setActionId(null)
+        return
+      }
     }
+    setItems((prev) => prev.filter((u) => u.id !== userId))
+    setActionId(null)
   }
 
   const handleBlock = async (userId) => {

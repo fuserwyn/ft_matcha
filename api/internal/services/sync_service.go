@@ -40,8 +40,11 @@ func (s *SyncService) SyncUser(ctx context.Context, userID uuid.UUID) error {
 		if p.Gender != nil {
 			doc.Gender = *p.Gender
 		}
-		if p.SexualPreference != nil {
-			doc.SexualPreference = *p.SexualPreference
+		if len(p.SexualPreference) > 0 {
+			doc.SexualPreference = p.SexualPreference
+		}
+		if p.RelationshipGoal != nil {
+			doc.RelationshipGoal = *p.RelationshipGoal
 		}
 		if p.BirthDate != nil {
 			doc.BirthDate = p.BirthDate.Format("2006-01-02")
@@ -53,6 +56,7 @@ func (s *SyncService) SyncUser(ctx context.Context, userID uuid.UUID) error {
 			doc.City = *p.City
 		}
 		doc.FameRating = p.FameRating
+		doc.LastOnline = p.UpdatedAt.Format(time.RFC3339)
 		if p.Latitude != nil && p.Longitude != nil {
 			doc.Location = &search.GeoPoint{Lat: *p.Latitude, Lon: *p.Longitude}
 		}

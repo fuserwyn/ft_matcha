@@ -195,14 +195,20 @@ func (s *SeedService) createSeedUserFromAPI(ctx context.Context, hash []byte, rn
 		lat := loc.lat + (rng.Float64()-0.5)*0.08
 		lon := loc.lon + (rng.Float64()-0.5)*0.08
 
-		preference := randomFrom(rng, []string{"male", "female", "both"})
+		preferenceStr := randomFrom(rng, []string{"male", "female"})
+		preferences := []string{preferenceStr}
+		if preferenceStr == "male" && gender == "female" {
+			preferences = []string{"male"}
+		} else if preferenceStr == "female" && gender == "male" {
+			preferences = []string{"female"}
+		}
 		bio := fmt.Sprintf("Hi, I'm %s. I like meeting new people.", ru.Name.First)
 
 		profile := &repository.Profile{
 			UserID:           userID,
 			Bio:              &bio,
 			Gender:           &gender,
-			SexualPreference: &preference,
+			SexualPreference: preferences,
 			BirthDate:        &birthDate,
 			City:             &city,
 			Latitude:         &lat,
