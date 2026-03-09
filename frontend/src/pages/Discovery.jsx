@@ -382,12 +382,13 @@ export default function Discovery() {
                   return (
                     <button key={u.id} type="button"
                       onClick={() => setSelectedUserId(u.id)}
+                      style={u.primary_photo_url ? {
+                        backgroundImage: `url(${u.primary_photo_url})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: 'top center',
+                      } : {}}
                       className="group relative block w-full rounded-2xl overflow-hidden aspect-[3/4] bg-slate-100 hover:shadow-xl transition-shadow active:scale-[0.98] cursor-pointer">
-                      {u.primary_photo_url ? (
-                        <img src={u.primary_photo_url} alt={displayName}
-                          className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          referrerPolicy="no-referrer" />
-                      ) : (
+                      {!u.primary_photo_url && (
                         <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-slate-100 to-slate-200">
                           <span className="text-7xl font-bold text-slate-300">{initial}</span>
                         </div>

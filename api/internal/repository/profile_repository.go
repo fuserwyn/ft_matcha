@@ -38,15 +38,15 @@ func (r *ProfileRepository) Count(ctx context.Context) (int, error) {
 	return total, err
 }
 
-func (r *ProfileRepository) CountByGender(ctx context.Context) (male int, female int, err error) {
+func (r *ProfileRepository) CountByGender(ctx context.Context) (male int, female int, nonBinary int, err error) {
 	rows, err := r.pool.Query(ctx, `
 		SELECT gender, COUNT(*)::int
 		FROM profiles
-		WHERE gender IN ('male', 'female')
+		WHERE gender IN ('male', 'female', 'non-binary')
 		GROUP BY gender
 	`)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
 	defer rows.Close()
 
@@ -54,19 +54,21 @@ func (r *ProfileRepository) CountByGender(ctx context.Context) (male int, female
 		var gender string
 		var count int
 		if err := rows.Scan(&gender, &count); err != nil {
-			return 0, 0, err
+			return 0, 0, 0, err
 		}
 		switch gender {
 		case "male":
 			male = count
 		case "female":
 			female = count
+		case "non-binary":
+			nonBinary = count
 		}
 	}
 	if err := rows.Err(); err != nil {
-		return 0, 0, err
+		return 0, 0, 0, err
 	}
-	return male, female, nil
+	return male, female, nonBinary, nil
 }
 
 func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (*Profile, error) {

@@ -198,8 +198,7 @@ export default function ProfileModal({ userId, onClose }) {
                     <img
                       src={primary.url}
                       alt={user.first_name}
-                      className="w-full aspect-[3/4] object-cover group-hover:scale-105 transition-transform duration-500"
-                      referrerPolicy="no-referrer"
+                      className="w-full aspect-[3/4] object-cover object-top group-hover:scale-105 transition-transform duration-500"
                     />
                   </div>
                 ) : (
