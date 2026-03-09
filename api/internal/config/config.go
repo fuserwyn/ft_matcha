@@ -6,25 +6,24 @@ import (
 	"strings"
 )
 
-func DatabaseURL() string {
-	if v := os.Getenv("DATABASE_URL"); v != "" {
-		return v
+func mustEnv(name string) string {
+	v := strings.TrimSpace(os.Getenv(name))
+	if v == "" {
+		panic("missing required env: " + name)
 	}
-	return "postgres://matcha:matcha_secret@localhost:5432/matcha?sslmode=disable"
+	return v
+}
+
+func DatabaseURL() string {
+	return mustEnv("DATABASE_URL")
 }
 
 func RedisURL() string {
-	if v := os.Getenv("REDIS_URL"); v != "" {
-		return v
-	}
-	return "redis://localhost:6379/0"
+	return mustEnv("REDIS_URL")
 }
 
 func JWTSecret() string {
-	if v := os.Getenv("JWT_SECRET"); v != "" {
-		return v
-	}
-	return "dev_secret"
+	return mustEnv("JWT_SECRET")
 }
 
 func CORSOrigin() string {
@@ -35,38 +34,23 @@ func CORSOrigin() string {
 }
 
 func ElasticsearchURL() string {
-	if v := os.Getenv("ELASTICSEARCH_URL"); v != "" {
-		return v
-	}
-	return "http://localhost:9200"
+	return mustEnv("ELASTICSEARCH_URL")
 }
 
 func MinIOEndpoint() string {
-	if v := os.Getenv("MINIO_ENDPOINT"); v != "" {
-		return v
-	}
-	return "localhost:9000"
+	return mustEnv("MINIO_ENDPOINT")
 }
 
 func MinIOAccessKey() string {
-	if v := os.Getenv("MINIO_ACCESS_KEY"); v != "" {
-		return v
-	}
-	return "minioadmin"
+	return mustEnv("MINIO_ACCESS_KEY")
 }
 
 func MinIOSecretKey() string {
-	if v := os.Getenv("MINIO_SECRET_KEY"); v != "" {
-		return v
-	}
-	return "minioadmin"
+	return mustEnv("MINIO_SECRET_KEY")
 }
 
 func MinIOBucket() string {
-	if v := os.Getenv("MINIO_BUCKET"); v != "" {
-		return v
-	}
-	return "matcha-photos"
+	return mustEnv("MINIO_BUCKET")
 }
 
 func MinIOPublicBaseURL() string {
@@ -80,24 +64,15 @@ func MinIOPublicBaseURL() string {
 }
 
 func SMTPHost() string {
-	if v := os.Getenv("SMTP_HOST"); v != "" {
-		return v
-	}
-	return "localhost"
+	return mustEnv("SMTP_HOST")
 }
 
 func SMTPPort() string {
-	if v := os.Getenv("SMTP_PORT"); v != "" {
-		return v
-	}
-	return "1025"
+	return mustEnv("SMTP_PORT")
 }
 
 func SMTPFrom() string {
-	if v := os.Getenv("SMTP_FROM"); v != "" {
-		return v
-	}
-	return "noreply@matcha.local"
+	return mustEnv("SMTP_FROM")
 }
 
 func SMTPCooldownSeconds() int {
