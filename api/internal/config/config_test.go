@@ -2,8 +2,27 @@ package config
 
 import (
 	"os"
+	"strings"
 	"testing"
 )
+
+func expectPanicContains(t *testing.T, want string, fn func()) {
+	t.Helper()
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatalf("expected panic containing %q, got nil", want)
+		}
+		msg, ok := r.(string)
+		if !ok {
+			t.Fatalf("panic type = %T, want string", r)
+		}
+		if !strings.Contains(msg, want) {
+			t.Fatalf("panic = %q, want contains %q", msg, want)
+		}
+	}()
+	fn()
+}
 
 func TestDatabaseURL(t *testing.T) {
 	orig := os.Getenv("DATABASE_URL")
@@ -15,9 +34,7 @@ func TestDatabaseURL(t *testing.T) {
 	}
 
 	os.Unsetenv("DATABASE_URL")
-	if got := DatabaseURL(); got == "" {
-		t.Error("DatabaseURL() should return default when unset")
-	}
+	expectPanicContains(t, "missing required env: DATABASE_URL", func() { _ = DatabaseURL() })
 }
 
 func TestSMTPHost(t *testing.T) {
@@ -30,9 +47,7 @@ func TestSMTPHost(t *testing.T) {
 	}
 
 	os.Unsetenv("SMTP_HOST")
-	if got := SMTPHost(); got != "localhost" {
-		t.Errorf("SMTPHost() default = %q, want localhost", got)
-	}
+	expectPanicContains(t, "missing required env: SMTP_HOST", func() { _ = SMTPHost() })
 }
 
 func TestSMTPPort(t *testing.T) {
@@ -45,9 +60,7 @@ func TestSMTPPort(t *testing.T) {
 	}
 
 	os.Unsetenv("SMTP_PORT")
-	if got := SMTPPort(); got != "1025" {
-		t.Errorf("SMTPPort() default = %q, want 1025", got)
-	}
+	expectPanicContains(t, "missing required env: SMTP_PORT", func() { _ = SMTPPort() })
 }
 
 func TestSMTPFrom(t *testing.T) {

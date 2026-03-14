@@ -41,6 +41,7 @@ export default function Profile() {
   const [savedAccount, setSavedAccount] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [savingPassword, setSavingPassword] = useState(false)
   const [savingTags, setSavingTags] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [photoList, setPhotoList] = useState([])
@@ -49,6 +50,11 @@ export default function Profile() {
   const [error, setError] = useState('')
   const [tagsMessage, setTagsMessage] = useState('')
   const [tagsError, setTagsError] = useState('')
+  const [passwordForm, setPasswordForm] = useState({
+    current_password: '',
+    new_password: '',
+    confirm_password: '',
+  })
 
   useEffect(() => {
     Promise.all([auth.me(), profile.get(), profile.getTags(), profile.tagSuggestions()])
@@ -105,6 +111,35 @@ export default function Profile() {
     }
   }
 
+  const handlePasswordInputChange = (e) => {
+    const { name, value } = e.target
+    setPasswordForm((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handlePasswordSubmit = async (e) => {
+    e.preventDefault()
+    setError('')
+    setMessage('')
+    if (!passwordForm.current_password || !passwordForm.new_password || !passwordForm.confirm_password) {
+      setError('Please fill all password fields')
+      return
+    }
+    if (passwordForm.new_password !== passwordForm.confirm_password) {
+      setError('New password and confirmation do not match')
+      return
+    }
+    setSavingPassword(true)
+    try {
+      await auth.changePassword(passwordForm)
+      setPasswordForm({ current_password: '', new_password: '', confirm_password: '' })
+      setMessage('Password updated')
+    } catch (err) {
+      setError(err.message || 'Password update failed')
+    } finally {
+      setSavingPassword(false)
+    }
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     setError('')
@@ -122,10 +157,12 @@ export default function Profile() {
       }
     }
     setSaving(true)
+    const effectiveSexualPreference =
+      data.sexual_preference.length > 0 ? data.sexual_preference : ['male', 'female']
     const payload = {}
     if (data.bio) payload.bio = data.bio
     if (data.gender) payload.gender = data.gender
-    if (data.sexual_preference.length > 0) payload.sexual_preference = data.sexual_preference
+    payload.sexual_preference = effectiveSexualPreference
     if (data.relationship_goal) payload.relationship_goal = data.relationship_goal
     if (data.birth_date) payload.birth_date = data.birth_date
     if (data.city) payload.city = data.city
@@ -133,6 +170,7 @@ export default function Profile() {
     if (data.longitude !== '') payload.longitude = parseFloat(data.longitude)
     try {
       await profile.update(payload)
+      setData((d) => ({ ...d, sexual_preference: effectiveSexualPreference }))
       setMessage('Profile updated')
       setSaved(true)
       setTimeout(() => setSaved(false), 2000)
@@ -199,7 +237,6 @@ export default function Profile() {
       async (err) => {
         setMessage('')
         if (err.code === 1 && location.protocol !== 'https:') {
-          // Permission denied on HTTP — fall back to IP-based geolocation
           try {
             const res = await fetch('https://ipapi.co/json/')
             const data = await res.json()
@@ -306,11 +343,7 @@ export default function Profile() {
       {message && <div className="mb-4 bg-emerald-50 text-emerald-700 px-4 py-3 rounded-lg text-sm">{message}</div>}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-
-        {/* ── Left column ── */}
         <div className="space-y-6">
-
-          {/* Account */}
           <form onSubmit={handleAccountSubmit} className="p-5 bg-white rounded-xl border border-slate-200 space-y-4">
             <p className="text-sm font-semibold text-slate-700">Account</p>
             <div className="grid grid-cols-2 gap-4">
@@ -341,7 +374,49 @@ export default function Profile() {
             </button>
           </form>
 
-          {/* Tags */}
+          <form onSubmit={handlePasswordSubmit} className="p-5 bg-white rounded-xl border border-slate-200 space-y-4">
+            <p className="text-sm font-semibold text-slate-700">Change password</p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Current password</label>
+                <input
+                  type="password"
+                  name="current_password"
+                  value={passwordForm.current_password}
+                  onChange={handlePasswordInputChange}
+                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">New password</label>
+                <input
+                  type="password"
+                  name="new_password"
+                  value={passwordForm.new_password}
+                  onChange={handlePasswordInputChange}
+                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Confirm password</label>
+                <input
+                  type="password"
+                  name="confirm_password"
+                  value={passwordForm.confirm_password}
+                  onChange={handlePasswordInputChange}
+                  className="w-full px-4 py-2 rounded-lg border border-slate-200 focus:ring-2 focus:ring-rose-500 focus:border-transparent outline-none"
+                />
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={savingPassword}
+              className="py-2 px-4 bg-slate-800 text-white font-medium rounded-lg hover:bg-slate-900 disabled:opacity-50 transition"
+            >
+              {savingPassword ? 'Updating...' : 'Change password'}
+            </button>
+          </form>
+
           <div className="p-5 bg-white rounded-xl border border-slate-200 space-y-3">
             <p className="text-sm font-semibold text-slate-700">Interests / Tags</p>
             <input type="text" value={tagsInput} onChange={(e) => setTagsInput(e.target.value)}
@@ -370,7 +445,6 @@ export default function Profile() {
             {tagsMessage && <div className="bg-emerald-50 text-emerald-700 px-4 py-2 rounded-lg text-sm">{tagsMessage}</div>}
           </div>
 
-          {/* Photos */}
           <div className="p-5 bg-white rounded-xl border border-slate-200">
             <div className="flex items-center justify-between mb-3">
               <p className="text-sm font-semibold text-slate-700">Photos ({photoList.length}/5)</p>
@@ -411,7 +485,6 @@ export default function Profile() {
 
         </div>
 
-        {/* ── Right column ── */}
         <div>
           <form onSubmit={handleSubmit} className="p-5 bg-white rounded-xl border border-slate-200 space-y-4">
             <p className="text-sm font-semibold text-slate-700">Profile details</p>

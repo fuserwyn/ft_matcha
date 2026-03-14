@@ -89,6 +89,11 @@ export default function Login() {
             <p className="text-xs text-slate-500 mt-1">
               8–72 characters. Avoid common passwords (e.g. password123, qwerty).
             </p>
+            <div className="mt-2 text-right">
+              <Link to="/forgot-password" className="text-sm text-rose-600 hover:underline">
+                Forgot password?
+              </Link>
+            </div>
           </div>
           <button
             type="submit"

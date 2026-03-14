@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react'
 import Cropper from 'react-easy-crop'
 
-// Aspect ratio matching our card design (3:4 portrait, like Tinder)
 const ASPECT = 3 / 4
 
 function getCroppedBlob(imageSrc, pixelCrop) {
@@ -50,7 +49,6 @@ export default function PhotoCropper({ imageSrc, onConfirm, onCancel }) {
       const blob = await getCroppedBlob(imageSrc, croppedAreaPixels)
       onConfirm(blob)
     } catch {
-      // ignore, just close
     } finally {
       setProcessing(false)
     }
@@ -58,7 +56,6 @@ export default function PhotoCropper({ imageSrc, onConfirm, onCancel }) {
 
   return (
     <div className="fixed inset-0 bg-black/90 z-50 flex flex-col">
-      {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 shrink-0">
         <button onClick={onCancel} className="text-white/70 hover:text-white text-sm font-medium">
           Cancel
@@ -73,7 +70,6 @@ export default function PhotoCropper({ imageSrc, onConfirm, onCancel }) {
         </button>
       </div>
 
-      {/* Crop area */}
       <div className="relative flex-1">
         <Cropper
           image={imageSrc}
@@ -95,7 +91,6 @@ export default function PhotoCropper({ imageSrc, onConfirm, onCancel }) {
         />
       </div>
 
-      {/* Zoom slider */}
       <div className="shrink-0 px-8 pb-6 pt-4 flex items-center gap-4">
         <span className="text-white/50 text-lg">⊖</span>
         <input

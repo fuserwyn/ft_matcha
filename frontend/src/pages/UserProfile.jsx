@@ -165,7 +165,6 @@ export default function UserProfile() {
         ← Back
       </button>
 
-      {/* ── Lightbox ── */}
       {isLightboxOpen && (
         <div
           className="fixed inset-0 bg-black/95 flex items-center justify-center z-50"
@@ -181,13 +180,11 @@ export default function UserProfile() {
             onClick={(e) => e.stopPropagation()}
           />
 
-          {/* Close */}
           <button onClick={closeLightbox}
             className="absolute top-4 right-4 text-white/80 hover:text-white text-4xl leading-none" aria-label="Close">
             ×
           </button>
 
-          {/* Prev */}
           {allPhotos.length > 1 && (
             <button
               onClick={(e) => { e.stopPropagation(); prevPhoto() }}
@@ -198,7 +195,6 @@ export default function UserProfile() {
             </button>
           )}
 
-          {/* Next */}
           {allPhotos.length > 1 && (
             <button
               onClick={(e) => { e.stopPropagation(); nextPhoto() }}
@@ -209,7 +205,6 @@ export default function UserProfile() {
           </button>
           )}
 
-          {/* Dot indicators */}
           {allPhotos.length > 1 && (
             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-2">
               {allPhotos.map((_, i) => (
@@ -227,9 +222,7 @@ export default function UserProfile() {
       <div className="bg-white rounded-2xl shadow-lg border border-slate-100 overflow-hidden">
         <div className="lg:flex">
 
-          {/* ── Left: photos ── */}
           <div className="lg:w-80 xl:w-96 shrink-0 border-b lg:border-b-0 lg:border-r border-slate-100">
-            {/* Primary photo — full width */}
             {primary ? (
               <div
                 className="cursor-pointer group overflow-hidden"
@@ -250,7 +243,6 @@ export default function UserProfile() {
               </div>
             )}
 
-            {/* Other photos — 2 columns (50% width each) */}
             {others.length > 0 && (
               <div className="p-3 pt-3 grid grid-cols-2 gap-2">
                 {others.map((p, i) => (
@@ -271,7 +263,6 @@ export default function UserProfile() {
             )}
           </div>
 
-          {/* ── Right: info ── */}
           <div className="flex-1 p-5 sm:p-7 flex flex-col">
             <div>
               <h1 className="text-2xl font-bold text-slate-800">{user.first_name} {user.last_name}</h1>

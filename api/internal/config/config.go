@@ -114,7 +114,6 @@ func MinUsersCount() int {
 	return 500
 }
 
-// E2ESkipEmailVerification when true, Register returns token immediately (for E2E tests)
 func E2ESkipEmailVerification() bool {
 	return os.Getenv("RUN_E2E") == "1"
 }

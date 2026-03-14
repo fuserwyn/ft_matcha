@@ -2,8 +2,6 @@ import { useState, useEffect, useRef, forwardRef, useImperativeHandle } from 're
 
 const CityInput = forwardRef(function CityInput({ value, onChange, placeholder = 'Paris, Amsterdam...', className = '' }, ref) {
   useImperativeHandle(ref, () => ({
-    // Call this before programmatically setting the value to prevent the
-    // autocomplete dropdown from opening (e.g. after a GPS location update).
     suppressNext() {
       justSelected.current = true
     },

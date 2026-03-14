@@ -42,10 +42,10 @@ type GeoPoint struct {
 type SearchFilters struct {
 	ExcludeID            uuid.UUID
 	ExcludeIDs           []uuid.UUID
-	Genders              []string // multiple: male, female, etc.
-	Interests            []string // multiple: male, female, non-binary, other
-	RelationshipGoals    []string // multiple relationship goal values
-	ReciprocityUserGender string  // current user's gender — only show users whose sexual_preference includes it
+	Genders              []string
+	Interests            []string
+	RelationshipGoals    []string
+	ReciprocityUserGender string
 	Tags                 []string
 	StrictTags           bool
 	City                 string
@@ -224,7 +224,6 @@ func (c *Client) SearchTags(ctx context.Context, prefix string, limit int) ([]st
 	if prefix == "" {
 		return nil, nil
 	}
-	// Regex for tags starting with prefix (case-insensitive)
 	includePattern := "(?i)" + regexp.QuoteMeta(prefix) + ".*"
 	query := map[string]interface{}{
 		"size": 0,
@@ -425,14 +424,12 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 			})
 		}
 	}
-	// Reciprocity: only show users whose sexual_preference includes the current user's gender
 	if f.ReciprocityUserGender != "" {
 		must = append(must, map[string]interface{}{
 			"term": map[string]interface{}{"sexual_preference": f.ReciprocityUserGender},
 		})
 	}
 	if len(f.Interests) > 0 {
-		// Filter to users whose sexual_preference array contains at least one of the requested interests
 		must = append(must, map[string]interface{}{
 			"terms": map[string]interface{}{"sexual_preference": f.Interests},
 		})
@@ -449,7 +446,6 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 		}
 	}
 	if f.City != "" {
-		// Use only the city name part (before any comma) — the autocomplete may send "Paris, Île-de-France, France"
 		cityName := strings.TrimSpace(f.City)
 		if idx := strings.Index(cityName, ","); idx != -1 {
 			cityName = strings.TrimSpace(cityName[:idx])
@@ -465,7 +461,6 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 		})
 	}
 	if len(f.Tags) > 0 && f.StrictTags {
-		// Partial match: "mus" finds music, musician, etc. (case-insensitive)
 		for _, tag := range f.Tags {
 			tag = strings.TrimSpace(strings.ToLower(tag))
 			if tag == "" {
@@ -594,7 +589,6 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 			{"fame_rating": map[string]interface{}{"order": "desc"}},
 		}
 	case "age":
-		// older age = earlier birth_date; asc = younger first, desc = older first
 		if sortOrder == "asc" {
 			sort = []map[string]interface{}{
 				{"birth_date": map[string]interface{}{"order": "desc"}},
@@ -624,14 +618,12 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 				{"fame_rating": map[string]interface{}{"order": "desc"}},
 			}
 		} else {
-			// Fallback when user has no location: sort by fame
 			sort = []map[string]interface{}{
 				{"fame_rating": map[string]interface{}{"order": sortOrder}},
 				{"created_at": map[string]interface{}{"order": "desc"}},
 			}
 		}
 	case "tags":
-		// Sort by number of matching tags: profiles with more common tags first
 		if len(f.Tags) > 0 {
 			tagFunctions := make([]map[string]interface{}, 0, len(f.Tags))
 			for _, tag := range f.Tags {
@@ -659,7 +651,6 @@ func (c *Client) Search(ctx context.Context, f SearchFilters) ([]UserDoc, error)
 				{"fame_rating": map[string]interface{}{"order": "desc"}},
 			}
 		} else {
-			// Fallback when user has no tags: sort by fame
 			sort = []map[string]interface{}{
 				{"fame_rating": map[string]interface{}{"order": sortOrder}},
 				{"created_at": map[string]interface{}{"order": "desc"}},

@@ -7,7 +7,6 @@ import (
 func TestMailer_SendSkipsWhenEmpty(t *testing.T) {
 	m := NewMailer("smtp.example.com", "587", "from@example.com", 0)
 
-	// Only empty to/host/port/from cause skip. Empty subject/body still attempt send.
 	err := m.Send("", "sub", "body")
 	if err != nil {
 		t.Errorf("Send() with empty to should skip and return nil, got err=%v", err)
@@ -36,8 +35,6 @@ func TestMailer_SendSkipsWithEmptyParams(t *testing.T) {
 }
 
 func TestMailer_CooldownZeroAttemptsSend(t *testing.T) {
-	// With cooldown 0 and valid-looking params, Send attempts SMTP (will fail on invalid host).
-	// Verifies we pass the skip checks and reach smtp.SendMail.
 	m := NewMailer("127.0.0.1", "15999", "from@example.com", 0)
 	err := m.Send("to@example.com", "sub", "body")
 	if err == nil {

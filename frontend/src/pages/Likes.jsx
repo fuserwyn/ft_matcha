@@ -78,7 +78,6 @@ export default function Likes() {
     try {
       await users.like(userId)
     } catch (err) {
-      // 409 "already liked" means they're already a match — still remove the card
       if (!(err.message || '').toLowerCase().includes('already')) {
         setError(err.message || 'Failed to like')
         setActionId(null)

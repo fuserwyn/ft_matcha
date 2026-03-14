@@ -109,6 +109,29 @@ func (s *AuthService) UpdateAccount(ctx context.Context, userID uuid.UUID, usern
 	return s.userRepo.UpdateAccount(ctx, userID, username, email, firstName, lastName)
 }
 
+func (s *AuthService) ChangePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error {
+	if err := validation.ValidatePassword(newPassword); err != nil {
+		return err
+	}
+	if currentPassword == newPassword {
+		return errors.New("new password must be different from current password")
+	}
+
+	u, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if err := bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(currentPassword)); err != nil {
+		return ErrInvalidPassword
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	return s.userRepo.UpdatePasswordHash(ctx, userID, string(hash))
+}
+
 func (s *AuthService) VerifyEmail(ctx context.Context, userID uuid.UUID) error {
 	return s.userRepo.SetEmailVerified(ctx, userID)
 }

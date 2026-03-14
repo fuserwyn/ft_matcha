@@ -31,8 +31,6 @@ func NewSeedService(
 	}
 }
 
-// ── Name pools ──────────────────────────────────────────────────────────────
-
 var maleFirstNames = []string{
 	"Liam", "Noah", "Oliver", "Elijah", "James", "William", "Benjamin", "Lucas",
 	"Henry", "Alexander", "Mason", "Ethan", "Daniel", "Matthew", "Aiden", "Jackson",
@@ -71,8 +69,6 @@ var lastNames = []string{
 	"Rossi", "Ferrari", "Esposito", "Romano", "Colombo", "Ricci", "Marino", "Bruno",
 }
 
-// ── Location pool ────────────────────────────────────────────────────────────
-
 var europeanLocations = []struct {
 	city string
 	lat  float64
@@ -94,8 +90,6 @@ var europeanLocations = []struct {
 	{"Prague", 50.0755, 14.4378},
 	{"Milan", 45.4654, 9.1859},
 }
-
-// ── Bio templates ────────────────────────────────────────────────────────────
 
 var maleBios = []string{
 	"Outdoor enthusiast who loves hiking and photography. Looking for someone to share adventures with.",
@@ -151,13 +145,9 @@ var nonBinaryBios = []string{
 	"Tattooed librarian with opinions about everything. Will talk philosophy at 2am.",
 }
 
-// ── Relationship goal pool ───────────────────────────────────────────────────
-
 var relationshipGoals = []string{
 	"long-term", "long-term-open", "short-term-open", "short-term", "friends", "not-sure",
 }
-
-// ── Tag pool ─────────────────────────────────────────────────────────────────
 
 var tagPool = []string{
 	"music", "travel", "books", "sports", "cinema", "art", "hiking", "food",
@@ -166,9 +156,6 @@ var tagPool = []string{
 	"surfing", "skiing", "reading", "writing", "tech", "design", "fashion",
 }
 
-// ── Sexual preference weights ────────────────────────────────────────────────
-
-// Returns a realistic sexual preference array for the given gender.
 func randomPreferences(rng *rand.Rand, gender string) []string {
 	r := rng.Float64()
 	switch gender {
@@ -198,7 +185,7 @@ func randomPreferences(rng *rand.Rand, gender string) []string {
 		default:
 			return []string{"male", "female", "non-binary", "other"}
 		}
-	default: // non-binary
+	default:
 		switch {
 		case r < 0.30:
 			return []string{"male", "female", "non-binary"}
@@ -213,8 +200,6 @@ func randomPreferences(rng *rand.Rand, gender string) []string {
 		}
 	}
 }
-
-// ── Portrait photo pools (verified Unsplash CDN IDs, 400×600, crop=faces) ────
 
 var femalePhotoIDs = []string{
 	"1494790108377-be9c29b29330",
@@ -268,8 +253,6 @@ var malePhotoIDs = []string{
 	"1599566150163-29194dcaad36",
 	"1560807707-8cc77767d783",
 }
-
-// ── Main entry point ─────────────────────────────────────────────────────────
 
 const targetPerGender = 170
 
@@ -357,7 +340,6 @@ func (s *SeedService) createSeedUser(ctx context.Context, hash []byte, rng *rand
 		return fmt.Errorf("create user %s: %w", username, err)
 	}
 
-	// Age: 18–45
 	ageYears := 18 + rng.Intn(28)
 	birthDate := time.Now().AddDate(-ageYears, -rng.Intn(12), -rng.Intn(28))
 
@@ -400,7 +382,6 @@ func (s *SeedService) createSeedUser(ctx context.Context, hash []byte, rng *rand
 		return fmt.Errorf("set tags %s: %w", username, err)
 	}
 
-	// Portrait photo — verified Unsplash CDN (400×600, face-cropped)
 	const unsplashBase = "https://images.unsplash.com/photo-%s?w=400&h=600&fit=crop&crop=faces&auto=format&q=80"
 	var photoURL string
 	switch gender {
@@ -421,7 +402,7 @@ func (s *SeedService) createSeedUser(ctx context.Context, hash []byte, rng *rand
 }
 
 func randomTags(rng *rand.Rand) []string {
-	n := 2 + rng.Intn(4) // 2–5 tags
+	n := 2 + rng.Intn(4)
 	picked := make([]string, 0, n)
 	seen := map[string]struct{}{}
 	for len(picked) < n {

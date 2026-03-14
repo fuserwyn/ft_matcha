@@ -106,31 +106,35 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 		f.ExcludeIDs = blockedIDs
 	}
 
-	if me, err := h.profileRepo.GetByUserID(c.Request.Context(), id); err == nil && me != nil {
-		// Default gender filter from user's sexual preference (what they're looking for)
-		if len(me.SexualPreference) > 0 {
-			f.Genders = me.SexualPreference
-		}
-		// Reciprocity: only show users whose interested_in includes the current user's gender
-		if me.Gender != nil && *me.Gender != "" {
-			f.ReciprocityUserGender = *me.Gender
-		}
-		if me.Latitude != nil && me.Longitude != nil {
-			f.UserLat = me.Latitude
-			f.UserLon = me.Longitude
-		}
-		if me.City != nil {
-			f.PreferredCity = *me.City
-		}
-		if myTags, err := h.profileRepo.GetTags(c.Request.Context(), id); err == nil {
-			f.Tags = myTags
-		}
+	me, err := h.profileRepo.GetByUserID(c.Request.Context(), id)
+	if err != nil || me == nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "complete your profile before using discovery"})
+		return
+	}
+	if !isDiscoveryProfileReady(me) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "complete your profile before using discovery"})
+		return
+	}
+	if len(me.SexualPreference) > 0 {
+		f.Genders = me.SexualPreference
+	}
+	if me.Gender != nil && *me.Gender != "" {
+		f.ReciprocityUserGender = *me.Gender
+	}
+	if me.Latitude != nil && me.Longitude != nil {
+		f.UserLat = me.Latitude
+		f.UserLon = me.Longitude
+	}
+	if me.City != nil {
+		f.PreferredCity = *me.City
+	}
+	if myTags, err := h.profileRepo.GetTags(c.Request.Context(), id); err == nil {
+		f.Tags = myTags
 	}
 	if v := c.Query("gender"); v != "" {
 		f.Genders = parseCommaList(v)
 	}
 	if v := c.Query("interest"); v != "" {
-		// "Interested in male" = show profiles whose gender is male
 		f.Genders = parseCommaList(v)
 	}
 	if v := c.Query("min_age"); v != "" {
@@ -172,6 +176,16 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 			f.MaxDistanceKm = n
 		}
 	}
+	if v := c.Query("current_lat"); v != "" {
+		if n, err := strconv.ParseFloat(v, 64); err == nil && n >= -90 && n <= 90 {
+			f.UserLat = &n
+		}
+	}
+	if v := c.Query("current_lon"); v != "" {
+		if n, err := strconv.ParseFloat(v, 64); err == nil && n >= -180 && n <= 180 {
+			f.UserLon = &n
+		}
+	}
 	if v := c.Query("relationship_goal"); v != "" {
 		f.RelationshipGoals = parseCommaList(v)
 	}
@@ -191,6 +205,7 @@ func (h *DiscoveryHandler) Search(c *gin.Context) {
 			f.Offset = n
 		}
 	}
+	applyDefaultDiscoveryGenders(&f)
 
 	cards, err := h.discoveryRepo.Search(c.Request.Context(), f)
 	if err != nil {
@@ -369,4 +384,32 @@ func parseCommaList(s string) []string {
 		}
 	}
 	return out
+}
+
+func isDiscoveryProfileReady(me *repository.Profile) bool {
+	if me == nil {
+		return false
+	}
+	if me.Gender == nil || strings.TrimSpace(*me.Gender) == "" {
+		return false
+	}
+	if len(me.SexualPreference) == 0 {
+		return false
+	}
+	if me.BirthDate == nil {
+		return false
+	}
+	if me.City == nil || strings.TrimSpace(*me.City) == "" {
+		return false
+	}
+	return true
+}
+
+func applyDefaultDiscoveryGenders(f *repository.DiscoveryFilters) {
+	if f == nil {
+		return
+	}
+	if len(f.Genders) == 0 {
+		f.Genders = []string{"female", "male"}
+	}
 }

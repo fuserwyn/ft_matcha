@@ -110,7 +110,7 @@ func (h *ChatHandler) Handle(c *gin.Context) {
 
 	stopPing := make(chan struct{})
 	defer close(stopPing)
-	go h.pingLoop(client, stopPing)
+	go h.pingLoop(userID, client, stopPing)
 
 	for {
 		var in incomingMessage
@@ -235,7 +235,6 @@ func (h *ChatHandler) processCallSignal(fromUserID uuid.UUID, in incomingMessage
 			return errors.New("candidate is required")
 		}
 	case "call_reject", "call_end":
-		// no extra payload
 	default:
 		return errors.New("unsupported event type")
 	}
@@ -305,13 +304,14 @@ func (h *ChatHandler) authenticate(c *gin.Context) (uuid.UUID, error) {
 	return claims.UserID, nil
 }
 
-func (h *ChatHandler) pingLoop(client *clientConn, stop <-chan struct{}) {
+func (h *ChatHandler) pingLoop(userID uuid.UUID, client *clientConn, stop <-chan struct{}) {
 	ticker := time.NewTicker(25 * time.Second)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
+			_ = h.presenceRepo.UpsertLastSeen(context.Background(), userID, time.Now().UTC())
 			if err := client.writeControl(gws.PingMessage, []byte("ping")); err != nil {
 				return
 			}

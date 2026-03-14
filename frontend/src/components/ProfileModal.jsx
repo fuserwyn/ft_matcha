@@ -33,7 +33,6 @@ export default function ProfileModal({ userId, onClose }) {
     setLightboxIndex((i) => (i + 1) % allPhotos.length),
   [allPhotos.length])
 
-  // Keyboard navigation
   useEffect(() => {
     const onKey = (e) => {
       if (isLightboxOpen) {
@@ -48,7 +47,6 @@ export default function ProfileModal({ userId, onClose }) {
     return () => window.removeEventListener('keydown', onKey)
   }, [isLightboxOpen, closeLightbox, prevPhoto, nextPhoto, onClose])
 
-  // Lock body scroll while modal is open
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'
@@ -151,19 +149,16 @@ export default function ProfileModal({ userId, onClose }) {
 
   return (
     <>
-      {/* ── Backdrop ── */}
       <div
         className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6"
         style={{ background: 'rgba(15,15,20,0.65)', backdropFilter: 'blur(8px)' }}
         onClick={onClose}
       >
-        {/* ── Modal card ── */}
         <div
           className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto"
           style={{ animation: 'modalIn 0.22s cubic-bezier(0.34,1.56,0.64,1) both' }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Close button */}
           <button
             onClick={onClose}
             aria-label="Close"
@@ -172,23 +167,18 @@ export default function ProfileModal({ userId, onClose }) {
             ×
           </button>
 
-          {/* Loading */}
           {loading && (
             <div className="flex justify-center py-24">
               <div className="animate-spin w-10 h-10 border-2 border-rose-400 border-t-transparent rounded-full" />
             </div>
           )}
 
-          {/* Error */}
           {!loading && (error || !user) && (
             <div className="text-center py-24 text-rose-600">{error || 'User not found'}</div>
           )}
 
-          {/* Content */}
           {!loading && user && (
             <div className="md:flex">
-
-              {/* ── Photos column ── */}
               <div className="md:w-64 lg:w-72 shrink-0 border-b md:border-b-0 md:border-r border-slate-100">
                 {primary ? (
                   <div
@@ -228,7 +218,6 @@ export default function ProfileModal({ userId, onClose }) {
                 )}
               </div>
 
-              {/* ── Info column ── */}
               <div className="flex-1 p-5 sm:p-6 flex flex-col min-w-0">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-800 leading-tight">
@@ -283,7 +272,6 @@ export default function ProfileModal({ userId, onClose }) {
                   )}
                 </div>
 
-                {/* Actions */}
                 <div className="mt-auto pt-5">
                   {!hasPrimaryPhoto && (
                     <p className="mb-3 text-amber-600 text-xs">Add a profile picture to like others.</p>
@@ -330,7 +318,6 @@ export default function ProfileModal({ userId, onClose }) {
         </div>
       </div>
 
-      {/* ── Lightbox ── */}
       {isLightboxOpen && (
         <div
           className="fixed inset-0 bg-black/95 flex items-center justify-center z-[60]"
@@ -372,7 +359,6 @@ export default function ProfileModal({ userId, onClose }) {
         </div>
       )}
 
-      {/* ── Report modal ── */}
       {reportModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] p-4" onClick={closeReportModal}>
           <div className="bg-white rounded-xl p-6 max-w-sm w-full shadow-xl" onClick={(e) => e.stopPropagation()}>

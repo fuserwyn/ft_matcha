@@ -117,7 +117,7 @@ func (h *LikesHandler) Like(c *gin.Context) {
 		_ = h.syncSvc.SyncUser(c.Request.Context(), likedID)
 	}
 	actor, _ := h.userRepo.GetByID(c.Request.Context(), myID)
-	if blocked, _ := h.blockRepo.BlockedBy(c.Request.Context(), likedID, myID); !blocked {
+	if blocked, _ := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, likedID); !blocked {
 		notif, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "like", nil, "You have a new like")
 		pushNotification(h.hub, likedID, notif)
 		if actor != nil {
@@ -131,14 +131,11 @@ func (h *LikesHandler) Like(c *gin.Context) {
 
 	isMatch, _ := h.likeRepo.IsMatch(c.Request.Context(), myID, likedID)
 	if isMatch {
-		blocked1, _ := h.blockRepo.BlockedBy(c.Request.Context(), likedID, myID)
-		blocked2, _ := h.blockRepo.BlockedBy(c.Request.Context(), myID, likedID)
-		if !blocked1 {
+		blockedEither, _ := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, likedID)
+		if !blockedEither {
 			n1, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "match", nil, "It's a match")
 			pushNotification(h.hub, likedID, n1)
 			_ = h.mailer.Send(exists.Email, "It's a match on Matcha", "You have a new match.")
-		}
-		if !blocked2 {
 			n2, _ := h.notificationRepo.Create(c.Request.Context(), myID, &likedID, "match", nil, "It's a match")
 			pushNotification(h.hub, myID, n2)
 			if actor != nil {
@@ -172,7 +169,7 @@ func (h *LikesHandler) Unlike(c *gin.Context) {
 	}
 
 	_ = h.likeRepo.Delete(c.Request.Context(), myID, likedID)
-	if blocked, _ := h.blockRepo.BlockedBy(c.Request.Context(), likedID, myID); !blocked {
+	if blocked, _ := h.blockRepo.IsBlockedEither(c.Request.Context(), myID, likedID); !blocked {
 		n, _ := h.notificationRepo.Create(c.Request.Context(), likedID, &myID, "unlike", nil, "A user unliked you")
 		pushNotification(h.hub, likedID, n)
 	}

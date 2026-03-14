@@ -98,7 +98,6 @@ func (r *ProfileRepository) GetByUserID(ctx context.Context, userID uuid.UUID) (
 }
 
 func (r *ProfileRepository) Upsert(ctx context.Context, p *Profile) error {
-	// Pass nil for empty sexual_preference so COALESCE keeps the existing value
 	var sp interface{}
 	if len(p.SexualPreference) > 0 {
 		sp = p.SexualPreference

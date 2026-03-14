@@ -281,8 +281,6 @@ func (h *PhotoHandler) ServePhoto(c *gin.Context) {
 	io.Copy(c.Writer, obj)
 }
 
-// photoURL returns the stored URL directly. Real uploads use a relative /storage/... path proxied
-// through nginx to MinIO — works from any host including mobile. Seed photos use their absolute picsum URL.
 func photoURL(p *repository.Photo, _ string) string {
 	return p.URL
 }

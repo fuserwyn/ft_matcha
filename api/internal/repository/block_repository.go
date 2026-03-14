@@ -52,7 +52,6 @@ func (r *BlockRepository) IsBlockedEither(ctx context.Context, userA, userB uuid
 	return blocked, err
 }
 
-// BlockedBy returns true if blockerID has blocked blockedID (recipient blocked actor).
 func (r *BlockRepository) BlockedBy(ctx context.Context, blockerID, blockedID uuid.UUID) (bool, error) {
 	var blocked bool
 	err := r.pool.QueryRow(ctx, `

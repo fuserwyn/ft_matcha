@@ -65,7 +65,12 @@ func (r *LikeRepository) GetLikedByMe(ctx context.Context, userID uuid.UUID, exc
 		FROM likes l
 		JOIN users u ON u.id = l.liked_user_id
 		LEFT JOIN profiles p ON p.user_id = u.id
-		WHERE l.user_id = $1 AND NOT (u.id = ANY($4::uuid[]))
+		WHERE l.user_id = $1
+		  AND NOT (u.id = ANY($4::uuid[]))
+		  AND NOT EXISTS (
+		    SELECT 1 FROM likes l2
+		    WHERE l2.user_id = l.liked_user_id AND l2.liked_user_id = l.user_id
+		  )
 		ORDER BY l.created_at DESC
 		LIMIT $2 OFFSET $3
 	`, userID, excludeIDs, limit, offset)
@@ -114,6 +119,10 @@ func (r *LikeRepository) GetLikedByMeCursor(ctx context.Context, userID uuid.UUI
 		LEFT JOIN profiles p ON p.user_id = u.id
 		WHERE l.user_id = $1
 		  AND NOT (u.id = ANY($3::uuid[]))
+		  AND NOT EXISTS (
+		    SELECT 1 FROM likes l2
+		    WHERE l2.user_id = l.liked_user_id AND l2.liked_user_id = l.user_id
+		  )
 		  AND (
 		    $4::timestamptz IS NULL
 		    OR l.created_at < $4

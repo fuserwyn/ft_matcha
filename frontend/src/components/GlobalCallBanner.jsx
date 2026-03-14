@@ -11,12 +11,10 @@ export default function GlobalCallBanner() {
   const wsRef = useRef(null)
   const [incoming, setIncoming] = useState(null)
 
-  // Keep locationRef in sync so the WS handler always sees the current path
   useEffect(() => {
     locationRef.current = location.pathname
   }, [location.pathname])
 
-  // Auto-dismiss if user navigated into the caller's own chat
   useEffect(() => {
     if (incoming && location.pathname === `/chat/${incoming.fromUserId}`) {
       setIncoming(null)
@@ -44,9 +42,7 @@ export default function GlobalCallBanner() {
 
           if (payload.type === 'call_invite' && payload.data) {
             const d = payload.data
-            // Ignore echo sent back to the caller themselves
             if (d.from_user_id === user?.id) return
-            // Already in the chat with this caller — let Chat.jsx handle it
             if (locationRef.current === `/chat/${d.from_user_id}`) return
 
             let fromName = 'Someone'
@@ -75,7 +71,6 @@ export default function GlobalCallBanner() {
             )
           }
         } catch {
-          // ignore malformed events
         }
       }
     }
@@ -127,7 +122,6 @@ export default function GlobalCallBanner() {
         className="bg-white border border-slate-200 rounded-2xl shadow-2xl p-4 flex items-center gap-4 w-full max-w-sm pointer-events-auto"
         style={{ animation: 'bannerIn 0.25s cubic-bezier(0.34,1.56,0.64,1) both' }}
       >
-        {/* avatar with pulsing ring */}
         <div className="relative shrink-0">
           {incoming.fromPhoto ? (
             <img
@@ -143,7 +137,6 @@ export default function GlobalCallBanner() {
           <span className="absolute inset-0 rounded-full border-2 border-rose-400 animate-ping opacity-60" />
         </div>
 
-        {/* info */}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-slate-800 text-sm truncate">{incoming.fromName}</p>
           <p className="text-xs text-slate-500">
@@ -151,7 +144,6 @@ export default function GlobalCallBanner() {
           </p>
         </div>
 
-        {/* decline */}
         <button
           type="button"
           onClick={decline}
@@ -163,7 +155,6 @@ export default function GlobalCallBanner() {
           </svg>
         </button>
 
-        {/* accept */}
         <button
           type="button"
           onClick={accept}

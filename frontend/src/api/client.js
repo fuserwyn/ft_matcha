@@ -25,8 +25,12 @@ export async function api(endpoint, options = {}) {
 export const auth = {
   register: (body) => api('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(body) }),
   login: (body) => api('/api/v1/auth/login', { method: 'POST', body: JSON.stringify(body) }),
+  forgotPassword: (body) => api('/api/v1/auth/forgot-password', { method: 'POST', body: JSON.stringify(body) }),
+  resetPassword: (body) => api('/api/v1/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
+  logout: () => api('/api/v1/auth/logout', { method: 'POST', body: JSON.stringify({}) }),
   me: () => api('/api/v1/auth/me'),
   updateMe: (body) => api('/api/v1/auth/me', { method: 'PATCH', body: JSON.stringify(body) }),
+  changePassword: (body) => api('/api/v1/auth/me/password', { method: 'PATCH', body: JSON.stringify(body) }),
 }
 
 export const profile = {

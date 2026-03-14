@@ -71,7 +71,6 @@ func (s *SyncService) RemoveUser(ctx context.Context, userID uuid.UUID) error {
 	return s.search.Delete(ctx, userID.String())
 }
 
-// ReindexAll syncs all users from PostgreSQL to Elasticsearch
 func (s *SyncService) ReindexAll(ctx context.Context) error {
 	ids, err := s.userRepo.ListIDs(ctx)
 	if err != nil {

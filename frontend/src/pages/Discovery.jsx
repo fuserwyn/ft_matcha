@@ -24,7 +24,6 @@ const GOAL_LABELS = {
 
 const PAGE_SIZE = 48
 
-// Module-level cache — survives React unmount/remount within the same session
 let cache = null
 
 const defaultFilters = {
@@ -39,10 +38,13 @@ const defaultFilters = {
   max_distance_km: '',
   sort_by: '',
   sort_order: '',
+  current_lat: '',
+  current_lon: '',
 }
 
 export default function Discovery() {
   const [list, setList] = useState(() => cache?.list || [])
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(!cache)
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(() => (cache?.hasMore ?? true))
@@ -53,23 +55,19 @@ export default function Discovery() {
   const [tagSuggestionsOpen, setTagSuggestionsOpen] = useState(false)
   const [aggregations, setAggregations] = useState({ gender: {}, interest: {}, relationship_goal: {} })
   const [filters, setFilters] = useState(() => cache?.filters || defaultFilters)
+  const requestingGeoRef = useRef(false)
 
-  // pendingScroll: set when restoring from cache, consumed once list renders
   const pendingScroll = useRef(cache?.scrollY ?? null)
-  // Track if filters changed by user (vs. initial mount)
   const initialMount = useRef(true)
 
-  // Scroll to saved position once the list is rendered
   useEffect(() => {
     if (pendingScroll.current !== null && list.length > 0) {
       const y = pendingScroll.current
       pendingScroll.current = null
-      // Double rAF ensures the DOM has fully painted
       requestAnimationFrame(() => requestAnimationFrame(() => window.scrollTo(0, y)))
     }
   }, [list])
 
-  // Save to cache on unmount
   useEffect(() => {
     return () => {
       cache = {
@@ -82,7 +80,6 @@ export default function Discovery() {
     }
   })
 
-  // Initial mount: fetch aggregations and load results if no cache
   useEffect(() => {
     users.filterAggregations()
       .then((r) => setAggregations({ gender: r.gender || {}, interest: r.interest || {}, relationship_goal: r.relationship_goal || {} }))
@@ -104,14 +101,40 @@ export default function Discovery() {
     if (f.max_distance_km) params.max_distance_km = f.max_distance_km
     if (f.sort_by) params.sort_by = f.sort_by
     if (f.sort_order) params.sort_order = f.sort_order
+    if (f.current_lat !== '' && f.current_lon !== '') {
+      params.current_lat = f.current_lat
+      params.current_lon = f.current_lon
+    }
     params.limit = PAGE_SIZE
     params.offset = currentOffset
     return params
   }
 
+  const requestCurrentLocationForDiscovery = () => {
+    if (requestingGeoRef.current) return
+    if (!navigator.geolocation) return
+    requestingGeoRef.current = true
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords
+        setFilters((f) => ({
+          ...f,
+          current_lat: String(latitude),
+          current_lon: String(longitude),
+        }))
+        requestingGeoRef.current = false
+      },
+      () => {
+        requestingGeoRef.current = false
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 },
+    )
+  }
+
   const load = async (f, { append = false, currentOffset = 0 } = {}) => {
     if (append) setLoadingMore(true)
     else setLoading(true)
+    setError('')
     try {
       const data = await users.search(buildParams(f, currentOffset))
       if (append) setList((prev) => [...prev, ...data])
@@ -119,22 +142,22 @@ export default function Discovery() {
       const newOffset = currentOffset + data.length
       setOffset(newOffset)
       setHasMore(data.length === PAGE_SIZE)
-    } catch {
+    } catch (err) {
       if (!append) setList([])
       setHasMore(false)
+      setError(err.message || 'Failed to load discovery')
     } finally {
       if (append) setLoadingMore(false)
       else setLoading(false)
     }
   }
 
-  // Reload when filters change (skip initial mount and profile pre-population)
   useEffect(() => {
     if (initialMount.current) {
       initialMount.current = false
       return
     }
-    pendingScroll.current = null // user changed filters, don't restore old scroll
+    pendingScroll.current = null
     setOffset(0)
     setHasMore(true)
     load(filters, { append: false, currentOffset: 0 })
@@ -152,7 +175,6 @@ export default function Discovery() {
     filters.sort_order,
   ])
 
-  // Tag suggestions
   useEffect(() => {
     const lastComma = filters.tags.lastIndexOf(',')
     const prefix = (lastComma >= 0 ? filters.tags.slice(lastComma + 1) : filters.tags).trim().toLowerCase()
@@ -171,7 +193,20 @@ export default function Discovery() {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target
-    setFilters((f) => ({ ...f, [name]: value }))
+    setFilters((f) => {
+      if (name === 'sort_by') {
+        if (!value) return { ...f, sort_by: '', sort_order: '' }
+        if (!f.sort_order) {
+          const defaultOrder = value === 'age' ? 'asc' : 'desc'
+          const next = { ...f, sort_by: value, sort_order: defaultOrder }
+          return next
+        }
+      }
+      return { ...f, [name]: value }
+    })
+    if (name === 'sort_by' && value === 'location') {
+      requestCurrentLocationForDiscovery()
+    }
   }
 
   const toggleInterest = (i) => {
@@ -220,7 +255,6 @@ export default function Discovery() {
 
       <div className="lg:flex lg:gap-6 lg:items-start">
 
-        {/* ── Sidebar filters ── */}
         <aside className={`lg:w-72 xl:w-80 shrink-0 mb-6 lg:mb-0 lg:sticky lg:top-20 ${filtersOpen ? 'block' : 'hidden lg:block'}`}>
           <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
             <div className="px-4 py-3 border-b border-slate-100 bg-slate-50">
@@ -229,7 +263,6 @@ export default function Discovery() {
 
             <div className="p-4 space-y-5">
 
-              {/* Interested in */}
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Interested in</p>
                 <div className="flex flex-wrap gap-2">
@@ -247,7 +280,6 @@ export default function Discovery() {
                 </div>
               </div>
 
-              {/* Looking for (relationship goal) */}
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Looking for</p>
                 <div className="flex flex-wrap gap-2">
@@ -265,7 +297,6 @@ export default function Discovery() {
                 </div>
               </div>
 
-              {/* Age range */}
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Age</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -284,7 +315,6 @@ export default function Discovery() {
                 </div>
               </div>
 
-              {/* Fame range */}
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Fame rating</p>
                 <div className="grid grid-cols-2 gap-2">
@@ -303,7 +333,6 @@ export default function Discovery() {
                 </div>
               </div>
 
-              {/* City */}
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">City</p>
                 <CityInput
@@ -314,7 +343,6 @@ export default function Discovery() {
                 />
               </div>
 
-              {/* Tags */}
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Tags</p>
                 <div className="relative">
@@ -337,7 +365,6 @@ export default function Discovery() {
                 </div>
               </div>
 
-              {/* Distance */}
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Max distance (km)</p>
                 <input type="number" name="max_distance_km" value={filters.max_distance_km}
@@ -345,7 +372,6 @@ export default function Discovery() {
                   className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300" />
               </div>
 
-              {/* Sort */}
               <div>
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Sort by</p>
                 <select name="sort_by" value={filters.sort_by} onChange={handleFilterChange}
@@ -358,13 +384,31 @@ export default function Discovery() {
                   <option value="tags">Common Tags</option>
                 </select>
               </div>
+              {filters.sort_by && (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">Order</p>
+                  <select
+                    name="sort_order"
+                    value={filters.sort_order}
+                    onChange={handleFilterChange}
+                    className="w-full px-3 py-2 rounded-lg border border-slate-200 text-sm focus:outline-none focus:border-rose-300"
+                  >
+                    <option value="asc">{filters.sort_by === 'age' ? 'Younger first' : 'Ascending'}</option>
+                    <option value="desc">{filters.sort_by === 'age' ? 'Older first' : 'Descending'}</option>
+                  </select>
+                </div>
+              )}
 
             </div>
           </div>
         </aside>
 
-        {/* ── Results grid ── */}
         <div className="flex-1 min-w-0">
+          {error && (
+            <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {error}
+            </div>
+          )}
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="animate-spin w-10 h-10 border-2 border-rose-400 border-t-transparent rounded-full" />
@@ -415,7 +459,7 @@ export default function Discovery() {
                           <div className="text-[10px] text-white/60 mt-0.5">{u.gender}</div>
                         )}
                         {Array.isArray(u.tags) && u.tags.length > 0 && (
-                          <div className="mt-2 flex flex-wrap gap-1">
+                          <div className="hidden sm:flex mt-2 flex-wrap gap-1">
                             {u.tags.slice(0, 3).map((tag) => (
                               <span key={tag} className="text-[10px] px-2 py-0.5 bg-white/20 backdrop-blur-sm rounded-full">
                                 #{tag}

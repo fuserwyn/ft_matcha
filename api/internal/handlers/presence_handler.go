@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -38,10 +39,21 @@ func (h *PresenceHandler) Get(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	isOnline := effectiveOnline(h.hub.IsOnline(id), lastSeen, time.Now().UTC())
 
 	c.JSON(http.StatusOK, gin.H{
 		"user_id":   id,
-		"is_online": h.hub.IsOnline(id),
+		"is_online": isOnline,
 		"last_seen": lastSeen,
 	})
+}
+
+func effectiveOnline(hubOnline bool, lastSeen *time.Time, now time.Time) bool {
+	if !hubOnline {
+		return false
+	}
+	if lastSeen == nil {
+		return false
+	}
+	return now.Sub(lastSeen.UTC()) <= 70*time.Second
 }

@@ -36,6 +36,7 @@ export function AuthProvider({ children }) {
   }
 
   const logout = () => {
+    authApi.logout().catch(() => {})
     localStorage.removeItem('token')
     setUser(null)
   }

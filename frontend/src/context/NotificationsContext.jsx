@@ -27,7 +27,6 @@ export function NotificationsProvider({ children }) {
       setMatchesCount(data.filter((n) => n.type === 'match').length)
       setViewsCount(data.filter((n) => n.type === 'view').length)
     } catch {
-      // keep previous counts on transient errors
     }
   }, [user])
 
@@ -59,7 +58,6 @@ export function NotificationsProvider({ children }) {
             safeRefresh()
           }
         } catch {
-          // ignore malformed payloads
         }
       }
     }

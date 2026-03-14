@@ -81,6 +81,12 @@ type UpdateAccountReq struct {
 	LastName  string `json:"last_name" binding:"required"`
 }
 
+type ChangePasswordReq struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required"`
+	ConfirmPassword string `json:"confirm_password" binding:"required"`
+}
+
 // Register godoc
 // @Summary	Register new user
 // @Tags		auth
@@ -177,10 +183,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // @Failure	302		Redirect to frontend /matches with error param
 // @Router		/api/v1/auth/verify-email [get]
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
-	base := strings.TrimRight(strings.TrimSpace(h.frontendBaseURL), "/")
-	if base == "" {
-		base = "http://localhost:3000"
-	}
+	base := h.normalizedFrontendBaseURL()
 
 	jsRedirect := func(params string) {
 		target := base + "/matches"
@@ -257,7 +260,7 @@ func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 		return
 	}
 	if u != nil && resetToken != "" {
-		resetLink := fmt.Sprintf("%s/reset-password?token=%s", h.frontendBaseURL, resetToken)
+		resetLink := fmt.Sprintf("%s/reset-password?token=%s", h.normalizedFrontendBaseURL(), resetToken)
 		body := fmt.Sprintf("Hi %s,\n\nReset your password by opening this link:\n%s\n", u.FirstName, resetLink)
 		if err := h.mailer.Send(u.Email, "Matcha password reset", body); err != nil {
 			log.Printf("[auth] failed sending password reset email to user=%s: %v", u.ID, err)
@@ -386,6 +389,42 @@ func (h *AuthHandler) UpdateMe(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// ChangePassword godoc
+// @Summary	Change current user password
+// @Tags		auth
+// @Security	BearerAuth
+// @Accept		json
+// @Produce	json
+// @Param		body	body		ChangePasswordReq	true	"Password change payload"
+// @Success	200	{object}	map[string]interface{}
+// @Failure	400	{object}	map[string]string
+// @Failure	401	{object}	map[string]string
+// @Router		/api/v1/auth/me/password [patch]
+func (h *AuthHandler) ChangePassword(c *gin.Context) {
+	userID, _ := c.Get(middleware.UserIDKey)
+	id := userID.(uuid.UUID)
+
+	var req ChangePasswordReq
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if req.NewPassword != req.ConfirmPassword {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "new_password and confirm_password must match"})
+		return
+	}
+
+	if err := h.authSvc.ChangePassword(c.Request.Context(), id, req.CurrentPassword, req.NewPassword); err != nil {
+		if err == services.ErrInvalidPassword {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "current password is incorrect"})
+			return
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 // Me godoc
 // @Summary	Get current user
 // @Tags		auth
@@ -412,6 +451,18 @@ func (h *AuthHandler) Me(c *gin.Context) {
 	})
 }
 
+// Logout godoc
+// @Summary	Logout current user
+// @Tags		auth
+// @Security	BearerAuth
+// @Produce	json
+// @Success	200	{object}	map[string]interface{}
+// @Failure	401	{object}	map[string]string
+// @Router		/api/v1/auth/logout [post]
+func (h *AuthHandler) Logout(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
 func (h *AuthHandler) issueToken(userID uuid.UUID) (string, error) {
 	claims := &middleware.Claims{
 		UserID: userID,
@@ -433,4 +484,12 @@ func (h *AuthHandler) issueEmailVerificationToken(ctx context.Context, userID uu
 		return "", err
 	}
 	return token, nil
+}
+
+func (h *AuthHandler) normalizedFrontendBaseURL() string {
+	base := strings.TrimRight(strings.TrimSpace(h.frontendBaseURL), "/")
+	if base == "" {
+		base = "http://localhost:3000"
+	}
+	return base
 }

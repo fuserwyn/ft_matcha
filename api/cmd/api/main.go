@@ -190,8 +190,10 @@ func main() {
 		api.GET("/auth/verify-email", authH.VerifyEmail)
 		api.POST("/auth/forgot-password", authH.ForgotPassword)
 		api.POST("/auth/reset-password", authH.ResetPassword)
+		api.POST("/auth/logout", authMw, touchPresenceMw, authH.Logout)
 		api.GET("/auth/me", authMw, touchPresenceMw, authH.Me)
 		api.PATCH("/auth/me", authMw, touchPresenceMw, authH.UpdateMe)
+		api.PATCH("/auth/me/password", authMw, touchPresenceMw, authH.ChangePassword)
 
 		profile := api.Group("/profile")
 		profile.Use(authMw, touchPresenceMw)

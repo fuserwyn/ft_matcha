@@ -73,17 +73,14 @@ export default function Chat() {
     callStateRef.current = callState
   }, [callState])
 
-  // If navigated here from GlobalCallBanner (user accepted call from another page),
-  // pre-populate the incoming offer so the in-chat banner appears immediately.
   useEffect(() => {
     const pending = location.state?.pendingCall
     if (pending) {
       setIncomingOffer(pending)
       setCallState('incoming')
-      // Clear the state so a page refresh doesn't re-trigger it
       window.history.replaceState({}, '', window.location.href)
     }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])
 
   const sendWsEvent = (payload) => {
     if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
@@ -144,7 +141,6 @@ export default function Chat() {
           candidate: event.candidate,
         })
       } catch {
-        // ignore transient websocket errors
       }
     }
     pc.ontrack = (event) => {
@@ -300,7 +296,6 @@ export default function Chat() {
         call_id: incomingOffer.call_id,
       })
     } catch {
-      // ignore websocket errors
     }
     setIncomingOffer(null)
     setCallState('idle')
@@ -316,7 +311,6 @@ export default function Chat() {
         })
       }
     } catch {
-      // ignore websocket errors
     }
     stopVideoCall()
   }
@@ -428,7 +422,6 @@ export default function Chat() {
             try {
               await pcRef.current.addIceCandidate(d.candidate)
             } catch {
-              // ignore race where remote description not set yet
             }
           } else if (payload.type === 'call_reject' && payload.data) {
             const d = payload.data
@@ -441,7 +434,6 @@ export default function Chat() {
             stopVideoCall()
           }
         } catch {
-          // ignore malformed events
         }
       }
     }
@@ -460,7 +452,6 @@ export default function Chat() {
         const p = await presence.get(otherUserId)
         setPresenceState(p)
       } catch {
-        // ignore poll errors
       }
     }, 15000)
     return () => clearInterval(id)
@@ -473,7 +464,6 @@ export default function Chat() {
         const msgs = await chat.listMessages(otherUserId)
         setMessages(msgs)
       } catch {
-        // ignore poll errors
       }
     }, 5000)
     return () => clearInterval(id)
@@ -504,8 +494,6 @@ export default function Chat() {
     }
   }
 
-  // ─── helpers ────────────────────────────────────────────────────────────────
-
   const avatarUrl = profile?.primary_photo_url
   const displayName = profile ? `${profile.first_name} ${profile.last_name}` : '…'
   const initials = profile
@@ -513,8 +501,6 @@ export default function Chat() {
     : '?'
 
   const inActiveCall = ['calling', 'connecting', 'in_call'].includes(callState)
-
-  // ─── loading / fatal error ───────────────────────────────────────────────────
 
   if (loading) {
     return (
@@ -535,12 +521,9 @@ export default function Chat() {
     )
   }
 
-  // ─── main chat UI ────────────────────────────────────────────────────────────
-
   return (
     <div className="max-w-2xl mx-auto flex flex-col -mt-6 sm:-mt-8 -mb-6 sm:-mb-8" style={{ height: 'calc(100vh - 3.5rem)' }}>
 
-      {/* ── header ── */}
       <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center gap-3 shrink-0 shadow-sm sticky top-14 z-10">
         <Link
           to="/matches"
@@ -552,7 +535,6 @@ export default function Chat() {
           </svg>
         </Link>
 
-        {/* avatar */}
         {avatarUrl ? (
           <img
             src={avatarUrl}
@@ -565,7 +547,6 @@ export default function Chat() {
           </div>
         )}
 
-        {/* name + presence */}
         <div className="flex-1 min-w-0">
           <p className="font-semibold text-slate-800 truncate leading-tight">{displayName}</p>
           <div className="flex items-center gap-1.5 mt-0.5">
@@ -580,7 +561,6 @@ export default function Chat() {
           </div>
         </div>
 
-        {/* call action buttons */}
         <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
@@ -607,7 +587,6 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* ── incoming call banner ── */}
       {callState === 'incoming' && (
         <div className="shrink-0 mx-3 mt-3 bg-white border border-slate-200 rounded-2xl shadow-lg p-4 flex items-center gap-4">
           <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-400 to-violet-500 flex items-center justify-center text-white shrink-0 animate-pulse">
@@ -650,11 +629,6 @@ export default function Chat() {
         </div>
       )}
 
-      {/* ── video panel ──
-           Outer div: padding-bottom trick gives 16:9 ratio in ALL browsers.
-           padding-bottom % is relative to WIDTH, so height = 56.25% of width = 16:9.
-           When idle: padding-bottom:0 + height:0 → collapses to nothing.
-           Video refs always stay in DOM so WebRTC works. */}
       <div
         className={`shrink-0 ${inActiveCall ? 'mx-3 mt-3' : ''}`}
         style={{
@@ -664,11 +638,9 @@ export default function Chat() {
           overflow: 'hidden',
         }}
       >
-        {/* Inner panel — absolutely fills outer, clips rounded corners */}
         <div
           className={`absolute inset-0 bg-black ${inActiveCall ? 'rounded-2xl overflow-hidden' : 'overflow-hidden'}`}
         >
-          {/* remote video — object-cover fills edge-to-edge, no bars */}
           <video
             ref={remoteVideoRef}
             autoPlay
@@ -677,7 +649,6 @@ export default function Chat() {
             className={callMode === 'audio' ? 'hidden' : ''}
           />
 
-          {/* audio-only placeholder */}
           {callMode === 'audio' && inActiveCall && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               {avatarUrl ? (
@@ -694,7 +665,6 @@ export default function Chat() {
             </div>
           )}
 
-          {/* local video PiP — padding-bottom trick for 3:4 ratio, cross-browser */}
           <div
             style={{
               position: 'absolute',
@@ -702,7 +672,7 @@ export default function Chat() {
               right: '12px',
               width: '22%',
               height: 0,
-              paddingBottom: '29.33%',  /* 22% * (4/3) = 29.33% of panel width */
+              paddingBottom: '29.33%',
               borderRadius: '16px',
               overflow: 'hidden',
               boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
@@ -723,7 +693,6 @@ export default function Chat() {
             )}
           </div>
 
-          {/* end-call button — bottom-center, z-10 keeps it above the connecting overlay */}
           {inActiveCall && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
               <button
@@ -739,7 +708,6 @@ export default function Chat() {
             </div>
           )}
 
-          {/* connecting overlay */}
           {(callState === 'calling' || callState === 'connecting') && (
             <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
               <div className="text-center">
@@ -751,7 +719,6 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* ── error banner ── */}
       {error && (
         <div className="shrink-0 mx-3 mt-3 flex items-center gap-2 bg-rose-50 border border-rose-200 text-rose-700 text-sm rounded-xl px-4 py-2.5">
           <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -766,7 +733,6 @@ export default function Chat() {
         </div>
       )}
 
-      {/* ── messages ── */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3 min-h-0">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-400">
@@ -784,7 +750,6 @@ export default function Chat() {
               const isVoice = m.message_type === 'voice' && m.media_url
               return (
                 <div key={m.id} className={`flex items-end gap-2 ${mine ? 'flex-row-reverse' : 'flex-row'}`}>
-                  {/* avatar for received messages */}
                   {!mine && (
                     avatarUrl ? (
                       <img src={avatarUrl} alt="" className="w-7 h-7 rounded-full object-cover shrink-0 mb-0.5" />
@@ -829,10 +794,8 @@ export default function Chat() {
         )}
       </div>
 
-      {/* ── input bar ── */}
       <div className="shrink-0 bg-white border-t border-slate-200 px-3 py-3">
         {isRecordingVoice ? (
-          /* recording state */
           <div className="flex items-center gap-3 bg-rose-50 border border-rose-200 rounded-2xl px-4 py-3">
             <span className="flex items-center gap-2 flex-1 text-rose-700 text-sm font-medium">
               <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
@@ -850,9 +813,7 @@ export default function Chat() {
             </button>
           </div>
         ) : (
-          /* normal input row */
           <form onSubmit={send} className="flex items-end gap-2">
-            {/* mic button */}
             <button
               type="button"
               onClick={startVoiceRecording}
@@ -864,7 +825,6 @@ export default function Chat() {
                 <path d="M19 10v2a7 7 0 01-14 0v-2H3v2a9 9 0 008 8.94V23h2v-2.06A9 9 0 0021 12v-2h-2z"/>
               </svg>
             </button>
-            {/* text input */}
             <input
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -872,7 +832,6 @@ export default function Chat() {
               placeholder={`Message ${profile?.first_name ?? ''}…`}
               className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:border-transparent transition resize-none"
             />
-            {/* send button */}
             <button
               type="submit"
               disabled={!input.trim()}

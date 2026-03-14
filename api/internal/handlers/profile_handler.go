@@ -32,7 +32,7 @@ func NewProfileHandler(profileRepo *repository.ProfileRepository, photoRepo *rep
 type UpdateProfileReq struct {
 	Bio              *string  `json:"bio"`               // max 500 chars
 	Gender           *string  `json:"gender"`            // male, female, non-binary, other
-	SexualPreference []string `json:"sexual_preference"` // array: male, female, non-binary, other
+	SexualPreference *[]string `json:"sexual_preference"` // array: male, female, non-binary, other
 	RelationshipGoal *string  `json:"relationship_goal"` // long-term, long-term-open, short-term-open, short-term, friends, not-sure
 	BirthDate        *string  `json:"birth_date"`        // YYYY-MM-DD, past, 18+
 	City             *string  `json:"city"`              // manually entered city
@@ -99,7 +99,6 @@ func (h *ProfileHandler) UpdateMe(c *gin.Context) {
 		return
 	}
 
-	// Validation
 	if req.BirthDate != nil && *req.BirthDate != "" {
 		if err := validation.ValidateBirthDate(*req.BirthDate); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -112,8 +111,9 @@ func (h *ProfileHandler) UpdateMe(c *gin.Context) {
 			return
 		}
 	}
-	if len(req.SexualPreference) > 0 {
-		if err := validation.ValidateSexualPreference(req.SexualPreference); err != nil {
+	sexualPreference := normalizeSexualPreference(req.SexualPreference)
+	if len(sexualPreference) > 0 {
+		if err := validation.ValidateSexualPreference(sexualPreference); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
@@ -153,7 +153,7 @@ func (h *ProfileHandler) UpdateMe(c *gin.Context) {
 		UserID:           id,
 		Bio:              req.Bio,
 		Gender:           req.Gender,
-		SexualPreference: req.SexualPreference,
+		SexualPreference: sexualPreference,
 		RelationshipGoal: req.RelationshipGoal,
 		City:             req.City,
 		Latitude:         req.Latitude,
@@ -443,4 +443,16 @@ func (h *ProfileHandler) attachPhotos(resp gin.H, photos []repository.Photo) {
 		}
 	}
 	resp["photos"] = photoResp
+}
+
+func normalizeSexualPreference(values *[]string) []string {
+	if values == nil {
+		return nil
+	}
+	if len(*values) == 0 {
+		return []string{"male", "female"}
+	}
+	out := make([]string, len(*values))
+	copy(out, *values)
+	return out
 }

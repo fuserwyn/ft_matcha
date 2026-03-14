@@ -59,21 +59,21 @@ func TestValidateGender(t *testing.T) {
 func TestValidateSexualPreference(t *testing.T) {
 	tests := []struct {
 		name    string
-		input   string
+		input   []string
 		wantErr bool
 	}{
-		{"both", "both", false},
-		{"male", "male", false},
-		{"female", "female", false},
-		{"other", "other", false},
-		{"empty", "", false},
-		{"invalid", "invalid", true},
+		{"single male", []string{"male"}, false},
+		{"single female", []string{"female"}, false},
+		{"single other", []string{"other"}, false},
+		{"multiple", []string{"male", "female"}, false},
+		{"empty", []string{}, false},
+		{"invalid", []string{"invalid"}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := ValidateSexualPreference(tt.input)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("ValidateSexualPreference(%q) err=%v wantErr=%v", tt.input, err, tt.wantErr)
+				t.Errorf("ValidateSexualPreference(%v) err=%v wantErr=%v", tt.input, err, tt.wantErr)
 			}
 		})
 	}
